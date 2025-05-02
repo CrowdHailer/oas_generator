@@ -585,6 +585,21 @@ fn path_args(match) {
   })
 }
 
+fn get_structure_json_media(content: dict.Dict(String, oas.MediaType)) {
+  dict.fold(content, #([], []), fn(acc, key, value) {
+    let #(known, unknown) = acc
+    case key {
+      "application/json" -> #([#(None, value), ..known], unknown)
+      "application/" <> rest ->
+        case string.split_once(rest, "+json") {
+          Ok(#(pre, "")) -> #([#(Some(pre), value), ..known], unknown)
+          _ -> #(known, [#(key, value), ..unknown])
+        }
+      _ -> #(known, [#(key, value), ..unknown])
+    }
+  })
+}
+
 fn gen_request_for_op(
   op_entry,
   pattern,
@@ -613,8 +628,9 @@ fn gen_request_for_op(
     Some(body) -> {
       let oas.RequestBody(content: content, ..) =
         oas.fetch_request_body(body, components.request_bodies)
-      case content |> dict.to_list {
-        [#("application/json", oas.MediaType(schema))] -> {
+      let #(known, unknown) = get_structure_json_media(content)
+      case known, unknown {
+        [#(_, oas.MediaType(schema))], _ ->
           case schema {
             oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
               let arg = safe_snake_case(name)
@@ -635,10 +651,15 @@ fn gen_request_for_op(
               None
             }
           }
+        // No content
+        [], [] -> None
+        [], [#(unknown, _)] -> {
+          io.println("unknown content type: " <> unknown)
+          None
         }
-        [] -> None
-        other -> {
-          io.debug(other)
+        _, _ -> {
+          echo known
+          echo unknown
           None
         }
       }
@@ -672,7 +693,7 @@ fn gen_request_for_op(
         let_("path", concat_path(match, "")),
         let_("query", glance.List(q_params, None)),
         ..case body {
-          Some(#(arg, encode)) -> [
+          Some(#(_arg, encode)) -> [
             let_("body", encode),
             glance.Expression(pipe(
               glance.Variable("base"),
@@ -773,17 +794,21 @@ fn safe_snake_case(in) {
 }
 
 fn gen_content_handling(content, wrapper) {
-  case content |> dict.to_list {
-    [#("application/json", oas.MediaType(schema))] ->
+  let #(known, unknown) = get_structure_json_media(content)
+  case known, unknown {
+    [#(_, oas.MediaType(schema))], _ ->
       gen_json_content_handling(schema, wrapper)
-    [] -> just_return_ok_nil(wrapper)
-    more ->
-      case list.key_find(more, "application/json") {
-        Ok(oas.MediaType(schema)) -> gen_json_content_handling(schema, wrapper)
-        _ -> {
-          just_return_ok_nil(wrapper)
-        }
-      }
+    // No content
+    [], [] -> just_return_ok_nil(wrapper)
+    [], [#(unknown, _)] -> {
+      io.println("unknown content type: " <> unknown)
+      just_return_ok_nil(wrapper)
+    }
+    _, _ -> {
+      echo known
+      echo unknown
+      just_return_ok_nil(wrapper)
+    }
   }
 }
 
@@ -1033,6 +1058,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
     "gleam/http",
     "gleam/http/response",
     "gleam/int",
+    "gleam/float",
     "gleam/json",
     "gleam/dynamic/decode",
     "gleam/result",
