@@ -1,0 +1,18 @@
+---
+version: 1.2.7
+title: simple_nullable_schema_test
+---
+import gleam/option.{type Option, None}
+import gleam/json
+import gleam/dynamic/decode
+
+pub type MyString =
+  String
+
+pub fn my_string_decoder() {
+  decode.string
+}
+
+pub fn my_string_encode(data: MyString) {
+  json.string(data)
+}

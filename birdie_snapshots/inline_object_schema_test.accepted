@@ -1,0 +1,34 @@
+---
+version: 1.2.7
+title: inline_object_schema_test
+file: ./test/midas/gen_test.gleam
+test_name: inline_object_schema_test
+---
+import gleam/option.{type Option, None}
+import gleam/json
+import gleam/dynamic/decode
+
+pub type User {
+  User(active: Option(Bool), name: Option(String), age: Option(Int))
+}
+
+pub fn user_decoder() {
+  use active <- decode.optional_field(
+    "active",
+    None,
+    decode.optional(decode.bool),
+  )
+  use name <- decode.optional_field("name", None, decode.optional(decode.string))
+  use age <- decode.optional_field("age", None, decode.optional(decode.int))
+  decode.success(User(active: active, name: name, age: age))
+}
+
+pub fn user_encode(data: User) {
+  json.object(
+    [
+      #("active", json.nullable(data.active, json.bool)),
+      #("name", json.nullable(data.name, json.string)),
+      #("age", json.nullable(data.age, json.int))
+    ],
+  )
+}

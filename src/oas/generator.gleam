@@ -1,0 +1,1074 @@
+import glance
+import glance_printer
+import gleam/bit_array
+import gleam/dict
+import gleam/http
+import gleam/int
+import gleam/io
+import gleam/list
+import gleam/option.{None, Some}
+import gleam/result.{try}
+import gleam/string
+import justin
+import midas/node/file_system as fs
+import oas
+
+fn concat_path(match, root) {
+  let #(str, rev) =
+    list.fold(match, #(root, []), fn(acc, segment) {
+      let #(current, prev) = acc
+      case segment {
+        oas.FixedSegment(s) -> #(current <> "/" <> s, prev)
+        oas.MatchSegment(name, schema) -> {
+          case schema {
+            oas.String(..) -> {
+              let prev = [glance.String(current <> "/"), ..prev]
+              let prev = [glance.Variable(safe_snake_case(name)), ..prev]
+              #("", prev)
+            }
+            oas.Integer(..) -> {
+              let prev = [glance.String(current <> "/"), ..prev]
+              let prev = [
+                call1(
+                  "int",
+                  "to_string",
+                  glance.Variable(safe_snake_case(name)),
+                ),
+                ..prev
+              ]
+              #("", prev)
+            }
+            _ -> {
+              // io.debug(schema)
+              // panic as "unsupported schema type for path segment"
+              let prev = [glance.String(current <> "/"), ..prev]
+              let prev = [glance.Variable(safe_snake_case(name)), ..prev]
+              #("", prev)
+            }
+          }
+        }
+      }
+    })
+  let parts = case str {
+    "" -> rev
+    _ -> [glance.String(str), ..rev]
+  }
+  let assert Ok(a) =
+    list.reduce(parts, fn(post, pre) {
+      glance.BinaryOperator(glance.Concatenate, pre, post)
+    })
+  a
+}
+
+fn escape_key(key) {
+  let key = case key {
+    "type" -> "type_"
+    "auto" -> "auto_"
+    "import" -> "import_"
+    // used in places
+    "base" -> "base_"
+    "path" -> "path_"
+    "method" -> "method_"
+    "token" -> "token_"
+    _ -> key
+  }
+  case key {
+    "_" <> key -> key
+    _ -> key
+  }
+  // github is weird
+  |> string.replace("-", "minus")
+  |> string.replace("+", "plus")
+  |> string.replace("1", "one")
+}
+
+fn is_optional(property, required) {
+  let #(key, schema) = property
+  !list.contains(required, key) || is_nullable(schema)
+}
+
+fn gen_object(properties, required, name) {
+  let fields =
+    list.map(properties, fn(property) {
+      let #(key, schema) = property
+      let type_ = case schema {
+        oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
+          glance.NamedType(justin.pascal_case(name), None, [])
+        }
+        oas.Ref(..) -> panic as "unsupported ref"
+        oas.Inline(schema) -> {
+          case schema {
+            oas.Boolean(..) -> glance.NamedType("Bool", None, [])
+            oas.Integer(..) -> glance.NamedType("Int", None, [])
+            oas.Number(..) -> glance.NamedType("Float", None, [])
+            oas.String(..) -> glance.NamedType("String", None, [])
+            oas.Null(..) -> glance.NamedType("Nil", None, [])
+            oas.Array(items:, ..) -> array_type(items)
+            oas.Object(..) -> glance.NamedType("Nil", None, [])
+            oas.AnyOf(..) | oas.AllOf(..) | oas.OneOf(..) ->
+              glance.NamedType("Nil", None, [])
+          }
+        }
+      }
+
+      glance.LabelledVariantField(
+        case is_optional(property, required) {
+          False -> type_
+          True -> glance.NamedType("Option", None, [type_])
+        },
+        escape_key(justin.snake_case(key)),
+      )
+    })
+  glance.CustomType(name, glance.Public, False, [], [
+    glance.Variant(name, fields),
+  ])
+}
+
+fn var_name(from) {
+  escape_key(justin.snake_case(from))
+}
+
+fn alias(to, type_) {
+  glance.TypeAlias(to, glance.Public, [], type_)
+}
+
+// Error is alias
+fn schema_to_type(entry) {
+  let #(name, schema) = entry
+  let type_ = justin.pascal_case(name)
+  case schema {
+    oas.Boolean(..) -> Error(alias(type_, glance.NamedType("Bool", None, [])))
+    oas.Integer(..) -> Error(alias(type_, glance.NamedType("Int", None, [])))
+    oas.Number(..) -> Error(alias(type_, glance.NamedType("Float", None, [])))
+    oas.String(..) -> Error(alias(type_, glance.NamedType("String", None, [])))
+    oas.Null(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
+    oas.Array(items:, ..) -> Error(alias(type_, array_type(items)))
+
+    oas.Object(properties:, required:, ..) ->
+      Ok(gen_object(dict.to_list(properties), required, type_))
+    oas.AllOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
+    oas.AnyOf(_items) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
+    oas.OneOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
+  }
+}
+
+fn array_type(items) {
+  let inner = case items {
+    oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
+      glance.NamedType(justin.pascal_case(inner), None, [])
+    oas.Ref(..) -> panic as "unexpected ref"
+    oas.Inline(inner) ->
+      case inner {
+        oas.Boolean(..) -> glance.NamedType("Bool", None, [])
+        oas.Integer(..) -> glance.NamedType("Int", None, [])
+        oas.Number(..) -> glance.NamedType("Float", None, [])
+        oas.String(..) -> glance.NamedType("String", None, [])
+        oas.Null(..) -> glance.NamedType("Nil", None, [])
+        oas.Array(items:, ..) -> array_type(items)
+        oas.Object(..) -> glance.NamedType("Nil", None, [])
+        oas.AnyOf(..) -> glance.NamedType("Nil", None, [])
+        oas.AllOf(..) -> glance.NamedType("Nil", None, [])
+        oas.OneOf(..) -> glance.NamedType("Nil", None, [])
+      }
+  }
+  glance.NamedType("List", None, [inner])
+}
+
+fn encode_fn(name) {
+  safe_snake_case(name) <> "_encode"
+}
+
+fn noop1(message) {
+  glance.Fn([glance.FnParameter(glance.Discarded(""), None)], None, [
+    glance.Expression(glance.Panic(Some(glance.String(message)))),
+  ])
+}
+
+fn schema_to_encoder(entry) {
+  let #(name, schema) = entry
+  let type_ = justin.pascal_case(name)
+
+  let exp = case schema {
+    oas.Boolean(..) -> call1("json", "bool", glance.Variable("data"))
+    oas.Integer(..) -> call1("json", "int", glance.Variable("data"))
+    oas.Number(..) -> call1("json", "float", glance.Variable("data"))
+    oas.String(..) -> call1("json", "string", glance.Variable("data"))
+    oas.Null(..) -> access("json", "null")
+    oas.Array(items:, ..) -> array_encoder(items, Some("data"))
+
+    oas.Object(properties:, required:, ..) -> {
+      let properties = dict.to_list(properties)
+      call1(
+        "json",
+        "object",
+        glance.List(
+          list.map(properties, fn(p) {
+            let #(key, schema) = p
+
+            glance.Tuple([
+              glance.String(key),
+              {
+                let arg =
+                  glance.FieldAccess(glance.Variable("data"), var_name(key))
+                let cast = case schema {
+                  oas.Ref(ref: "#/components/schemas/" <> named, ..) ->
+                    glance.Variable(encode_fn(named))
+                  oas.Ref(ref:, ..) -> noop1("unknown ref name: " <> ref)
+                  oas.Inline(oas.Boolean(..)) ->
+                    glance.FieldAccess(glance.Variable("json"), "bool")
+                  oas.Inline(oas.Integer(..)) ->
+                    glance.FieldAccess(glance.Variable("json"), "int")
+                  oas.Inline(oas.Number(..)) ->
+                    glance.FieldAccess(glance.Variable("json"), "float")
+                  oas.Inline(oas.String(..)) ->
+                    glance.FieldAccess(glance.Variable("json"), "string")
+                  oas.Inline(oas.Null(..)) -> noop1("encode null in field")
+                  oas.Inline(oas.Array(items:, ..)) ->
+                    array_encoder(items, None)
+                  oas.Inline(oas.Object(..)) ->
+                    noop1("Literal object inside field")
+                  oas.Inline(oas.AllOf(_items)) -> noop1("AllOf inside field")
+                  oas.Inline(oas.AnyOf(_items)) -> noop1("AnyOf inside field")
+                  oas.Inline(oas.OneOf(_items)) -> noop1("OneOf inside field")
+                }
+
+                case is_optional(p, required) {
+                  False -> glance.Call(cast, [glance.UnlabelledField(arg)])
+                  True -> call2("json", "nullable", arg, cast)
+                }
+              },
+            ])
+          }),
+          None,
+        ),
+      )
+    }
+    //     oas.AllOf(parts) -> {
+    //       let properties =
+    //         list.fold(parts, dict.new(), fn(acc, part) {
+    //           case part {
+    //             oas.Inline(properties) -> properties
+    //             oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
+    //               let assert Ok(oas.Object(properties, ..)) =
+    //                 dict.get(schemas, name)
+    //               properties
+    //             }
+    //             oas.Ref(ref: ref, ..) -> {
+    //               io.debug(ref)
+    //               panic as "not valid ref"
+    //             }
+    //           }
+    //           |> dict.merge(acc)
+    //         })
+    //       let type_ = justin.pascal_case(name)
+    //       let properties = dict.to_list(properties)
+    //       Ok(
+    //         // #(gen_object(properties, type_, schemas), 
+    //         [
+    //           gen_zero_decoder(properties, type_, schemas),
+    //           gen_json_encoder(properties, type_, schemas),
+    //         ],
+    //       )
+    //     }
+    oas.AllOf(..) -> glance.Panic(Some(glance.String("AllOf")))
+    oas.AnyOf(..) -> glance.Panic(Some(glance.String("AnyOf")))
+    oas.OneOf(..) -> glance.Panic(Some(glance.String("OneOf")))
+  }
+  let ignored = case schema {
+    oas.Null(..) -> True
+    oas.Object(properties:, ..) -> dict.is_empty(properties)
+    oas.AllOf(..) | oas.AnyOf(..) | oas.OneOf(..) -> True
+    _ -> False
+  }
+  let assignment = case ignored {
+    True -> glance.Discarded("data")
+    False -> glance.Named("data")
+  }
+
+  glance.Function(
+    name: encode_fn(name),
+    publicity: glance.Public,
+    parameters: [
+      glance.FunctionParameter(
+        None,
+        assignment,
+        // could annotate with type returned from to custom type
+        Some(glance.NamedType(type_, None, [])),
+      ),
+    ],
+    return: None,
+    body: [glance.Expression(exp)],
+    location: glance.Span(0, 0),
+  )
+}
+
+fn array_encoder(items, top_level) {
+  let mapper = case items {
+    oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
+      glance.Variable(encode_fn(inner))
+    oas.Ref(..) -> panic as "unexpected ref"
+    oas.Inline(items) ->
+      case items {
+        oas.Boolean(..) -> access("json", "bool")
+        oas.Integer(..) -> access("json", "int")
+        oas.Number(..) -> access("json", "float")
+        oas.String(..) -> access("json", "string")
+        oas.Null(..) -> noop1("null in array")
+        oas.Array(items:, ..) -> array_encoder(items, None)
+        oas.Object(..) -> noop1("object in array")
+        oas.AllOf(..) -> noop1("Alloas.AllOf in array")
+        oas.AnyOf(..) -> noop1("Anyoas.AnyOf in array")
+        oas.OneOf(..) -> noop1("Oneoas.OneOf in array")
+      }
+  }
+  let arg = case top_level {
+    Some(var) -> glance.Variable(var)
+    None -> glance.Variable("_")
+  }
+  call2("json", "array", arg, mapper)
+}
+
+fn decoder(name) {
+  safe_snake_case(name) <> "_decoder"
+}
+
+fn always_decode() {
+  call2(
+    "decode",
+    "new_primitive_decoder",
+    glance.String("Nil"),
+    glance.Fn([glance.FnParameter(glance.Discarded(""), None)], None, [
+      glance.Expression(
+        glance.Call(glance.Variable("Ok"), [
+          glance.UnlabelledField(glance.Variable("Nil")),
+        ]),
+      ),
+    ]),
+  )
+}
+
+fn is_nullable(schema) {
+  case schema {
+    oas.Ref(..) -> False
+    oas.Inline(schema) ->
+      case schema {
+        oas.Boolean(nullable:, ..) -> nullable
+        oas.Integer(nullable:, ..) -> nullable
+        oas.Number(nullable:, ..) -> nullable
+        oas.String(nullable:, ..) -> nullable
+        oas.Null(..) -> False
+        oas.Array(nullable:, ..) -> nullable
+        oas.Object(nullable:, ..) -> nullable
+        oas.AllOf(_) -> False
+        oas.AnyOf(_) -> False
+        oas.OneOf(_) -> False
+      }
+  }
+}
+
+fn schema_to_decoder(entry) {
+  let #(name, schema) = entry
+  let type_ = justin.pascal_case(name)
+
+  let body = case schema {
+    oas.Boolean(..) -> [glance.Expression(access("decode", "bool"))]
+    oas.Integer(..) -> [glance.Expression(access("decode", "int"))]
+    oas.Number(..) -> [glance.Expression(access("decode", "float"))]
+    oas.String(..) -> [glance.Expression(access("decode", "string"))]
+    oas.Null(..) -> [glance.Expression(always_decode())]
+    oas.Array(items:, ..) -> [glance.Expression(array_decoder(items))]
+    oas.Object(properties:, required:, ..) -> {
+      let properties = dict.to_list(properties)
+      let #(fields, cons) =
+        list.map(properties, fn(property) {
+          let #(key, schema) = property
+
+          let field_decoder = case schema {
+            oas.Ref(ref: "#/components/schemas/" <> s, ..) ->
+              glance.Call(glance.Variable(decoder(s)), [])
+            oas.Ref(..) -> panic as "unknown ref"
+            oas.Inline(oas.Boolean(..)) -> access("decode", "bool")
+            oas.Inline(oas.Integer(..)) -> access("decode", "int")
+            oas.Inline(oas.Number(..)) -> access("decode", "float")
+            oas.Inline(oas.String(..)) -> access("decode", "string")
+            oas.Inline(oas.Null(..)) -> always_decode()
+            oas.Inline(oas.Array(items:, ..)) -> array_decoder(items)
+            oas.Inline(oas.Object(..)) -> always_decode()
+            oas.Inline(oas.AllOf(..)) -> always_decode()
+            oas.Inline(oas.AnyOf(..)) -> always_decode()
+            oas.Inline(oas.OneOf(..)) -> always_decode()
+          }
+          let is_optional = !list.contains(required, key) || is_nullable(schema)
+          #(
+            glance.Use(
+              [glance.PatternVariable(var_name(key))],
+              case is_optional {
+                False ->
+                  call2("decode", "field", glance.String(key), field_decoder)
+                True ->
+                  glance.Call(access("decode", "optional_field"), [
+                    glance.UnlabelledField(glance.String(key)),
+                    glance.UnlabelledField(glance.Variable("None")),
+                    glance.UnlabelledField(call1(
+                      "decode",
+                      "optional",
+                      field_decoder,
+                    )),
+                  ])
+              },
+            ),
+            glance.LabelledField(var_name(key), glance.Variable(var_name(key))),
+          )
+        })
+        |> list.unzip
+
+      let final =
+        glance.Expression(
+          call1("decode", "success", case list.length(cons) {
+            0 -> glance.Variable(type_)
+            _ -> glance.Call(glance.Variable(type_), cons)
+          }),
+        )
+      list.append(fields, [final])
+    }
+    oas.AllOf(..) -> [
+      glance.Expression(glance.Panic(Some(glance.String("AllOf")))),
+    ]
+    oas.AnyOf(..) -> [
+      glance.Expression(glance.Panic(Some(glance.String("AnyOf")))),
+    ]
+    oas.OneOf(..) -> [
+      glance.Expression(glance.Panic(Some(glance.String("OneOf")))),
+    ]
+  }
+  glance.Function(
+    name: decoder(name),
+    publicity: glance.Public,
+    parameters: [],
+    return: None,
+    body:,
+    location: glance.Span(0, 0),
+  )
+}
+
+fn array_decoder(items) {
+  let exp = case items {
+    oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
+      glance.Call(glance.Variable(decoder(inner)), [])
+    oas.Ref(..) -> panic as "what is this s ref"
+    oas.Inline(inner) -> {
+      case inner {
+        oas.Boolean(..) -> access("decode", "bool")
+        oas.Integer(..) -> access("decode", "int")
+        oas.Number(..) -> access("decode", "float")
+        oas.String(..) -> access("decode", "string")
+        oas.Null(..) -> always_decode()
+        oas.Array(items:, ..) -> array_decoder(items)
+        oas.Object(..) -> always_decode()
+        oas.AllOf(..) -> always_decode()
+        oas.AnyOf(..) -> always_decode()
+        oas.OneOf(..) -> always_decode()
+      }
+    }
+  }
+  call1("decode", "list", exp)
+}
+
+fn gen_schema(schemas) {
+  let types = list.map(dict.to_list(schemas), schema_to_type)
+  let custom_types = list.filter_map(types, fn(x) { x })
+  let type_aliases =
+    list.filter_map(types, fn(x) {
+      case x {
+        Ok(_) -> Error(Nil)
+        Error(x) -> Ok(x)
+      }
+    })
+
+  let fns =
+    list.flat_map(dict.to_list(schemas), fn(entry) {
+      let encode = schema_to_encoder(entry)
+      let decode = schema_to_decoder(entry)
+      [encode, decode]
+    })
+  #(custom_types, type_aliases, fns)
+}
+
+fn access(object_or_mod, field) {
+  glance.FieldAccess(glance.Variable(object_or_mod), field)
+}
+
+fn call0(m, f) {
+  glance.Call(glance.FieldAccess(glance.Variable(m), f), [])
+}
+
+fn call1(m, f, a) {
+  glance.Call(glance.FieldAccess(glance.Variable(m), f), [
+    glance.UnlabelledField(a),
+  ])
+}
+
+fn call2(m, f, a, b) {
+  glance.Call(glance.FieldAccess(glance.Variable(m), f), [
+    glance.UnlabelledField(a),
+    glance.UnlabelledField(b),
+  ])
+}
+
+fn pipe(a, b) {
+  glance.BinaryOperator(glance.Pipe, a, b)
+}
+
+fn query_to_parts(parameters, components: oas.Components) {
+  list.map(parameters, fn(p) {
+    let #(key, required, schema) = p
+    let schema = oas.fetch_schema(schema, components.schemas)
+    let key = safe_snake_case(key) |> escape_key
+    let arg = glance.FunctionParameter(Some(key), glance.Named(key), None)
+    let var = glance.Variable(key)
+
+    let mapper = case schema {
+      oas.Boolean(..) -> Some(access("bool", "to_string"))
+      oas.Integer(..) -> Some(access("int", "to_string"))
+      oas.Number(..) -> Some(access("float", "to_string"))
+      oas.String(..) -> None
+      _ -> Some(noop1("query parameter is not supported"))
+    }
+    let value = case required {
+      True ->
+        call1("option", "Some", case mapper {
+          Some(m) -> glance.Call(m, [glance.UnlabelledField(var)])
+          None -> var
+        })
+      False ->
+        case mapper {
+          Some(mapper) -> call2("option", "map", var, mapper)
+          None -> var
+        }
+    }
+    let tuple = glance.Tuple([glance.String(key), value])
+    #(arg, tuple)
+  })
+  |> list.unzip
+}
+
+fn gen_method(method) {
+  case method {
+    http.Get -> glance.FieldAccess(glance.Variable("http"), "Get")
+    http.Post -> glance.FieldAccess(glance.Variable("http"), "Post")
+    http.Head -> glance.FieldAccess(glance.Variable("http"), "Head")
+    http.Put -> glance.FieldAccess(glance.Variable("http"), "Put")
+    http.Delete -> glance.FieldAccess(glance.Variable("http"), "Delete")
+    http.Trace -> glance.FieldAccess(glance.Variable("http"), "Trace")
+    http.Connect -> glance.FieldAccess(glance.Variable("http"), "Connect")
+    http.Options -> glance.FieldAccess(glance.Variable("http"), "Options")
+    http.Patch -> glance.FieldAccess(glance.Variable("http"), "Patch")
+    http.Other(other) -> call1("http", "Other", glance.String(other))
+  }
+}
+
+fn let_(var, value) {
+  glance.Assignment(glance.Let, glance.PatternVariable(var), None, value)
+}
+
+fn path_args(match) {
+  list.filter_map(match, fn(segment) {
+    case segment {
+      oas.FixedSegment(_) -> Error(Nil)
+      oas.MatchSegment(name, _schema) ->
+        Ok(glance.FunctionParameter(
+          None,
+          glance.Named(safe_snake_case(name)),
+          None,
+        ))
+    }
+  })
+}
+
+fn gen_request_for_op(
+  op_entry,
+  pattern,
+  path_parameters,
+  components: oas.Components,
+) {
+  let #(method, op) = op_entry
+  let oas.Operation(operation_id: id, parameters: op_parameters, ..) = op
+  let id = safe_snake_case(id)
+
+  let parameters = list.append(op_parameters, path_parameters)
+  let parameters =
+    list.map(parameters, oas.fetch_parameter(_, components.parameters))
+  let #(q_args, q_params) =
+    query_to_parts(oas.query_parameters(parameters), components)
+
+  let match = case oas.gather_match(pattern, parameters, components) {
+    Ok(match) -> match
+    Error(reason) -> {
+      echo #(reason, pattern, parameters)
+      todo
+    }
+  }
+
+  let body = case op.request_body {
+    Some(body) -> {
+      let oas.RequestBody(content: content, ..) =
+        oas.fetch_request_body(body, components.request_bodies)
+      case content |> dict.to_list {
+        [#("application/json", oas.MediaType(schema))] -> {
+          case schema {
+            oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
+              let arg = safe_snake_case(name)
+              let encode =
+                call1(
+                  "utils",
+                  "json_to_bits",
+                  call1("schema", encode_fn(name), glance.Variable(arg)),
+                )
+              Some(#(arg, encode))
+            }
+            oas.Inline(oas.Object(..)) -> {
+              Some(#("data", glance.Variable("data")))
+            }
+            _ -> {
+              io.debug(#("iiiii", schema))
+              // TODO inline
+              None
+            }
+          }
+        }
+        [] -> None
+        other -> {
+          io.debug(other)
+          None
+        }
+      }
+    }
+    None -> None
+  }
+  let parameters =
+    path_args(match)
+    |> list.append(case body {
+      Some(#(arg, _)) -> [
+        glance.FunctionParameter(None, glance.Named(arg), None),
+      ]
+      None -> []
+    })
+    |> list.append(q_args)
+
+  let op_request = id <> "_request"
+  let op_response = id <> "_response"
+
+  let req_fn =
+    glance.Function(
+      name: op_request,
+      publicity: glance.Public,
+      parameters: [
+        glance.FunctionParameter(None, glance.Named("base"), None),
+        ..parameters
+      ],
+      return: None,
+      body: [
+        let_("method", gen_method(method)),
+        let_("path", concat_path(match, "")),
+        let_("query", glance.List(q_params, None)),
+        ..case body {
+          Some(#(arg, encode)) -> [
+            let_("body", encode),
+            glance.Expression(pipe(
+              glance.Variable("base"),
+              pipe(
+                call1("utils", "set_method", glance.Variable("method")),
+                pipe(
+                  call1("utils", "append_path", glance.Variable("path")),
+                  pipe(
+                    call1("utils", "set_query", glance.Variable("query")),
+                    call2(
+                      "utils",
+                      "set_body",
+                      glance.String("application/json"),
+                      glance.Variable("body"),
+                    ),
+                  ),
+                ),
+              ),
+            )),
+          ]
+          None -> [
+            glance.Expression(pipe(
+              glance.Variable("base"),
+              pipe(
+                call1("utils", "set_method", glance.Variable("method")),
+                pipe(
+                  call1("utils", "append_path", glance.Variable("path")),
+                  call1("utils", "set_query", glance.Variable("query")),
+                ),
+              ),
+            )),
+          ]
+        }
+      ],
+      location: glance.Span(0, 0),
+    )
+  let fn_ =
+    glance.Function(
+      name: id,
+      publicity: glance.Public,
+      parameters: [
+        glance.FunctionParameter(None, glance.Named("token"), None),
+        ..parameters
+      ],
+      return: None,
+      body: [
+        let_(
+          "request",
+          glance.Call(glance.Variable("base_request"), [
+            glance.UnlabelledField(glance.Variable("token")),
+          ]),
+        ),
+        let_(
+          "request",
+          glance.Call(
+            glance.FieldAccess(glance.Variable("operations"), op_request),
+            [
+              glance.UnlabelledField(glance.Variable("request")),
+              ..list.map(parameters, fn(p) {
+                let assert glance.FunctionParameter(
+                  name: glance.Named(name),
+                  ..,
+                ) = p
+                glance.UnlabelledField(glance.Variable(name))
+              })
+            ],
+          ),
+        ),
+        glance.Use(
+          [glance.PatternVariable("response")],
+          call1("t", "do", call1("t", "fetch", glance.Variable("request"))),
+        ),
+        glance.Use(
+          [glance.PatternVariable("data")],
+          call1(
+            "t",
+            "try",
+            glance.Call(glance.Variable("handle_errors"), [
+              glance.UnlabelledField(call1(
+                "operations",
+                op_response,
+                glance.Variable("response"),
+              )),
+            ]),
+          ),
+        ),
+        glance.Expression(call1("t", "Done", glance.Variable("data"))),
+      ],
+      location: glance.Span(0, 0),
+    )
+  #(fn_, req_fn)
+}
+
+fn safe_snake_case(in) {
+  justin.snake_case(in)
+  |> string.replace("/", "_")
+  |> escape_key
+}
+
+fn gen_content_handling(content, wrapper) {
+  case content |> dict.to_list {
+    [#("application/json", oas.MediaType(schema))] ->
+      gen_json_content_handling(schema, wrapper)
+    [] -> just_return_ok_nil(wrapper)
+    more ->
+      case list.key_find(more, "application/json") {
+        Ok(oas.MediaType(schema)) -> gen_json_content_handling(schema, wrapper)
+        _ -> {
+          just_return_ok_nil(wrapper)
+        }
+      }
+  }
+}
+
+fn just_return_ok_nil(wrapper) {
+  let thing =
+    glance.Call(glance.Variable(wrapper), [
+      glance.UnlabelledField(glance.Variable("Nil")),
+    ])
+    |> pipe(glance.Variable("Ok"))
+  #(thing, False)
+}
+
+fn gen_json_content_handling(schema, wrapper) {
+  let decoder = case schema {
+    oas.Inline(oas.Array(
+      items: oas.Ref(
+        ref: "#/components/schemas/" <> name,
+        ..,
+      ),
+      ..,
+    )) ->
+      call1(
+        "decode",
+        "list",
+        call0("schema", safe_snake_case(name) <> "_decoder"),
+      )
+    oas.Ref(ref: "#/components/schemas/" <> name, ..) ->
+      call0("schema", safe_snake_case(name) <> "_decoder")
+    oas.Inline(oas.Object(..)) -> {
+      // call0("zerox", "any")
+      glance.FieldAccess(glance.Variable("decode"), "dynamic")
+    }
+    _ -> {
+      call2(
+        "decode",
+        "failure",
+        glance.Variable("Nil"),
+        glance.String("Unsupported schema"),
+      )
+    }
+  }
+  let action =
+    call2("json", "parse_bits", glance.Variable("body"), decoder)
+    |> pipe(call1("result", "map", glance.Variable(wrapper)))
+  #(action, True)
+}
+
+fn status_range(responses, above_equal, bellow) {
+  list.filter_map(responses, fn(response) {
+    let #(status, response) = response
+    case status {
+      oas.Status(i) if above_equal <= i && i < bellow -> Ok(#(i, response))
+      _ -> Error(Nil)
+    }
+  })
+}
+
+fn gen_response(operation, components: oas.Components) {
+  let #(_method, op) = operation
+  let op: oas.Operation = op
+  let responses = op.responses |> dict.to_list
+  let default =
+    list.find_map(responses, fn(response) {
+      let #(status, response) = response
+      case status {
+        oas.Default -> Ok(response)
+        _ -> Error(Nil)
+      }
+    })
+  let #(default_branch, used) = case default {
+    Ok(response) -> {
+      let oas.Response(content: content, ..) =
+        oas.fetch_response(response, components.responses)
+      gen_content_handling(content, "Error")
+    }
+    Error(Nil) -> {
+      case status_range(responses, 400, 600) {
+        [#(status, first), ..rest] -> {
+          case
+            list.try_fold(rest, [status], fn(acc, this) {
+              let #(status, this) = this
+              case first, this {
+                oas.Ref(ref: a, ..), oas.Ref(ref: b, ..) if a == b ->
+                  Ok([status, ..acc])
+                oas.Inline(oas.Response(content: a, ..)),
+                  oas.Inline(oas.Response(content: b, ..))
+                  if a == b
+                -> Ok([status, ..acc])
+                _, _ -> Error(Nil)
+              }
+            })
+          {
+            Ok(_statuses) -> {
+              let oas.Response(content: content, ..) =
+                oas.fetch_response(first, components.responses)
+              gen_content_handling(content, "Error")
+            }
+            Error(_) -> {
+              let branch =
+                glance.Variable("response")
+                |> pipe(glance.Variable("Error"))
+                |> pipe(glance.Variable("Ok"))
+
+              #(branch, False)
+            }
+          }
+        }
+        [] -> {
+          let branch =
+            glance.Variable("response")
+            |> pipe(glance.Variable("Error"))
+            |> pipe(glance.Variable("Ok"))
+
+          #(branch, False)
+        }
+      }
+    }
+  }
+  let default_clause =
+    glance.Clause([[glance.PatternDiscard("")]], None, default_branch)
+  let #(used, expected_clauses) = case
+    status_range(responses, 200, 300)
+    |> list.sort(fn(ra, rb) { int.compare(ra.0, rb.0) })
+  {
+    [] -> #(used, [])
+    [#(status, first), ..more] -> {
+      case more {
+        [] -> Nil
+        _ -> {
+          echo more
+          echo "ignoring some clauses"
+          Nil
+        }
+      }
+      let oas.Response(content: content, ..) =
+        oas.fetch_response(first, components.responses)
+      let #(branch, u) = gen_content_handling(content, "Ok")
+      let clause =
+        glance.Clause(
+          [[glance.PatternInt(int.to_string(status))]],
+          None,
+          branch,
+        )
+      #(used || u, [clause])
+    }
+  }
+
+  glance.Function(
+    name: safe_snake_case(op.operation_id) <> "_response",
+    publicity: glance.Public,
+    parameters: [glance.FunctionParameter(None, glance.Named("response"), None)],
+    return: None,
+    body: [
+      glance.Assignment(
+        glance.Let,
+        glance.PatternConstructor(
+          Some("response"),
+          // This is broken in glance printer
+          ".Response",
+          [
+            glance.ShorthandField("status"),
+            ..case used {
+              True -> [glance.ShorthandField("body")]
+              False -> []
+            }
+          ],
+          True,
+        ),
+        None,
+        glance.Variable("response"),
+      ),
+      glance.Expression(glance.Case(
+        [glance.Variable("status")],
+        list.append(expected_clauses, [default_clause]),
+      )),
+    ],
+    location: glance.Span(0, 0),
+  )
+}
+
+fn gen_fns(key, path_item: oas.PathItem, components) {
+  list.map(path_item.operations, fn(op) {
+    // gen_request_for_op(op, key, path_item.parameters, components)
+    // |> list.append([gen_response(op, components)])
+    // |> list.reverse
+    let #(fn_, req_fn) =
+      gen_request_for_op(op, key, path_item.parameters, components)
+    #([gen_response(op, components), req_fn], fn_)
+  })
+  // |> list.unzip
+}
+
+fn gen_ops(op, components) {
+  let #(key, path) = op
+  gen_fns(key, path, components)
+}
+
+fn defs(xs) {
+  list.map(xs, glance.Definition([], _))
+}
+
+pub fn build(spec_src, project_path, provider) {
+  let module_path = project_path <> "/src/" <> provider
+  use spec <- try(fs.read_json(spec_src, oas.decoder))
+
+  let #(operations, entry) = gen_operations_and_top_files(spec, provider)
+
+  use Nil <- try(fs.write(
+    module_path <> "/operations.gleam",
+    operations |> bit_array.from_string,
+  ))
+
+  use mod <- try(fs.read(module_path <> ".gleam"))
+  let assert Ok(mod) = bit_array.to_string(mod)
+  let split = "// GENERATED ---"
+  let pre = case string.split_once(mod, split) {
+    Ok(#(pre, _)) -> pre
+    Error(Nil) -> mod
+  }
+
+  let content = <<pre:utf8, split:utf8, "----------\n\n", entry:utf8>>
+  use Nil <- try(fs.write(module_path <> ".gleam", content))
+
+  let content =
+    gen_schema_file(spec.components.schemas) |> bit_array.from_string()
+
+  use Nil <- try(fs.write(module_path <> "/schema.gleam", content))
+  Ok(Nil)
+}
+
+pub fn gen_operations_and_top_files(spec: oas.Document, provider) {
+  let paths = dict.to_list(spec.paths)
+  let fs = list.flat_map(paths, gen_ops(_, spec.components))
+  let #(parts, top) = list.unzip(fs)
+  let parts = list.flatten(parts)
+
+  let modules = [
+    provider <> "/utils",
+    provider <> "/schema",
+    "gleam/http",
+    "gleam/http/response",
+    "gleam/int",
+    "gleam/json",
+    "gleam/dynamic/decode",
+    "gleam/result",
+    "gleam/bool",
+    "gleam/option",
+  ]
+  let operations =
+    glance.Module(
+      defs(list.map(modules, glance.Import(_, None, [], []))),
+      [],
+      [],
+      [],
+      list.map(parts, glance.Definition([], _)),
+    )
+    |> glance_printer.print
+
+  let entry =
+    glance.Module([], [], [], [], list.map(top, glance.Definition([], _)))
+    |> glance_printer.print
+  #(operations, entry)
+}
+
+pub fn gen_schema_file(schemas) {
+  let #(custom_types, type_aliases, decoders) = gen_schema(schemas)
+
+  glance.Module(
+    [
+      glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
+      glance.Definition([], glance.Import("gleam/json", None, [], [])),
+      glance.Definition(
+        [],
+        glance.Import(
+          "gleam/option",
+          None,
+          [glance.UnqualifiedImport("Option", None)],
+          [glance.UnqualifiedImport("None", None)],
+        ),
+      ),
+    ],
+    defs(custom_types),
+    defs(type_aliases),
+    [],
+    defs(decoders),
+  )
+  |> glance_printer.print
+}

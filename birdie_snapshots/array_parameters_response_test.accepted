@@ -1,0 +1,38 @@
+---
+version: 1.2.7
+title: array_parameters_response_test
+file: ./test/oas/generator/operations_test.gleam
+test_name: array_parameters_response_test
+---
+import gleam/option
+import gleam/bool
+import gleam/result
+import gleam/dynamic/decode
+import gleam/json
+import gleam/int
+import gleam/http/response
+import gleam/http
+import myservice/schema
+import myservice/utils
+
+pub fn get_users_request(base, tags tags) {
+  let method = http.Get
+  let path = "/users"
+  let query = [
+    #(
+      "tags",
+      option.map(tags, fn(_) { panic as "query parameter is not supported" }),
+    )
+  ]
+  base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
+    query,
+  )
+}
+
+pub fn get_users_response(response) {
+  let response.Response(status:, body:, ..) = response
+  case status {
+    200 -> json.parse_bits(body, schema.account_decoder()) |> result.map(Ok)
+    _ -> response |> Error |> Ok
+  }
+}

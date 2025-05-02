@@ -1,0 +1,7 @@
+---
+version: 1.2.6
+title: my first snapshot
+file: ./test/midas_gen_test.gleam
+test_name: hello_birdie_test
+---
+🐦‍⬛ Smile for the birdie!
