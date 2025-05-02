@@ -56,7 +56,7 @@ pub fn single_response_test() {
     oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
 
   let doc = oas.Document("", no_info, None, [], paths, components)
-  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice")
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "get_test")
 }
 
@@ -83,7 +83,7 @@ pub fn array_parameters_response_test() {
     oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
 
   let doc = oas.Document("", no_info, None, [], paths, components)
-  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice")
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "array_parameters_response_test")
 }
 
@@ -103,7 +103,7 @@ pub fn no_content_response_test() {
     oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
 
   let doc = oas.Document("", no_info, None, [], paths, components)
-  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice")
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "no_content_response")
 }
 
@@ -122,7 +122,7 @@ pub fn multiple_error_response_test() {
     oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
 
   let doc = oas.Document("", no_info, None, [], paths, components)
-  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice")
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "multiple_error_response_test")
 }
 // If error response structure looks the same

@@ -964,8 +964,13 @@ fn gen_response(operation, components: oas.Components) {
   )
 }
 
-fn gen_fns(key, path_item: oas.PathItem, components) {
-  list.map(path_item.operations, fn(op) {
+fn gen_fns(key, path_item: oas.PathItem, components, exclude) {
+  let operations =
+    list.filter(path_item.operations, fn(op) {
+      !list.contains(exclude, { op.1 }.operation_id)
+    })
+
+  list.map(operations, fn(op) {
     // gen_request_for_op(op, key, path_item.parameters, components)
     // |> list.append([gen_response(op, components)])
     // |> list.reverse
@@ -976,20 +981,22 @@ fn gen_fns(key, path_item: oas.PathItem, components) {
   // |> list.unzip
 }
 
-fn gen_ops(op, components) {
+fn gen_ops(op, components, exclude) {
   let #(key, path) = op
-  gen_fns(key, path, components)
+
+  gen_fns(key, path, components, exclude)
 }
 
 fn defs(xs) {
   list.map(xs, glance.Definition([], _))
 }
 
-pub fn build(spec_src, project_path, provider) {
+pub fn build(spec_src, project_path, provider, exclude) {
   let module_path = project_path <> "/src/" <> provider
   use spec <- try(fs.read_json(spec_src, oas.decoder))
 
-  let #(operations, entry) = gen_operations_and_top_files(spec, provider)
+  let #(operations, entry) =
+    gen_operations_and_top_files(spec, provider, exclude)
 
   use Nil <- try(fs.write(
     module_path <> "/operations.gleam",
@@ -1014,9 +1021,9 @@ pub fn build(spec_src, project_path, provider) {
   Ok(Nil)
 }
 
-pub fn gen_operations_and_top_files(spec: oas.Document, provider) {
+pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let paths = dict.to_list(spec.paths)
-  let fs = list.flat_map(paths, gen_ops(_, spec.components))
+  let fs = list.flat_map(paths, gen_ops(_, spec.components, exclude))
   let #(parts, top) = list.unzip(fs)
   let parts = list.flatten(parts)
 
