@@ -63,4 +63,4 @@ gleam test  # Run the tests
 ```
 
 ## 🧑‍💻 Credit
-Created for [Spotless](https://spotless.run), a code first integration platform.
+Created for [Spotless](https://github.com/CrowdHailer/gleam_spotless), a code first integration platform.

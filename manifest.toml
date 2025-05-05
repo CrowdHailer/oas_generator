@@ -9,7 +9,7 @@ packages = [
   { name = "filepath", version = "1.1.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "filepath", source = "hex", outer_checksum = "B06A9AF0BF10E51401D64B98E4B627F1D2E48C154967DA7AF4D0914780A6D40A" },
   { name = "glam", version = "2.0.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "glam", source = "hex", outer_checksum = "4932A2D139AB0389E149396407F89654928D7B815E212BB02F13C66F53B1BBA1" },
   { name = "glance", version = "3.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "glexer"], otp_app = "glance", source = "hex", outer_checksum = "F3458292AFB4136CEE23142A8727C1270494E7A96978B9B9F9D2C1618583EF3D" },
-  { name = "glance_printer", version = "2.0.0", build_tools = ["gleam"], requirements = ["glam", "glance", "gleam_stdlib"], source = "git", repo = "https://github.com/crowdhailer/glance_printer", commit = "44158b3238b8d112e1a1d3b99db9f7f68f2fe511" },
+  { name = "glance_printer", version = "3.0.0", build_tools = ["gleam"], requirements = ["glam", "glance", "gleam_stdlib"], otp_app = "glance_printer", source = "hex", outer_checksum = "8386C156B413B90828884577F89AADD4C131AA1C3DAFC826607BAEE40E636ACE" },
   { name = "gleam_community_ansi", version = "1.4.3", build_tools = ["gleam"], requirements = ["gleam_community_colour", "gleam_regexp", "gleam_stdlib"], otp_app = "gleam_community_ansi", source = "hex", outer_checksum = "8A62AE9CC6EA65BEA630D95016D6C07E4F9973565FA3D0DE68DC4200D8E0DD27" },
   { name = "gleam_community_colour", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib"], otp_app = "gleam_community_colour", source = "hex", outer_checksum = "FDD6AC62C6EC8506C005949A4FCEF032038191D5EAAEC3C9A203CD53AE956ACA" },
   { name = "gleam_erlang", version = "0.34.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleam_erlang", source = "hex", outer_checksum = "0C38F2A128BAA0CEF17C3000BD2097EB80634E239CE31A86400C4416A5D0FDCC" },
@@ -42,7 +42,7 @@ packages = [
 [requirements]
 birdie = { version = ">= 1.2.7 and < 2.0.0" }
 glance = { version = ">= 3.0.0 and < 4.0.0" }
-glance_printer = { git = "https://github.com/crowdhailer/glance_printer", ref = "44158b3238b8d112e1a1d3b99db9f7f68f2fe511" }
+glance_printer = { version = ">= 3.0.0 and < 4.0.0" }
 gleam_http = { version = ">= 3.7.2 and < 4.0.0" }
 gleam_stdlib = { version = ">= 0.34.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }

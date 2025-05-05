@@ -618,9 +618,9 @@ fn gen_request_for_op(
 
   let match = case oas.gather_match(pattern, parameters, components) {
     Ok(match) -> match
-    Error(reason) -> {
-      echo #(reason, pattern, parameters)
-      todo
+    Error(_reason) -> {
+      //  #(reason, pattern, parameters)
+      panic as "could not find all parameters in match"
     }
   }
 
@@ -642,13 +642,8 @@ fn gen_request_for_op(
                 )
               Some(#(arg, encode))
             }
-            oas.Inline(oas.Object(..)) -> {
-              Some(#("data", glance.Variable("data")))
-            }
             _ -> {
-              io.debug(#("iiiii", schema))
-              // TODO inline
-              None
+              Some(#("data", glance.Variable("data")))
             }
           }
         // No content
@@ -658,8 +653,7 @@ fn gen_request_for_op(
           None
         }
         _, _ -> {
-          echo known
-          echo unknown
+          io.println("multiple content types not supported")
           None
         }
       }
@@ -805,8 +799,7 @@ fn gen_content_handling(content, wrapper) {
       just_return_ok_nil(wrapper)
     }
     _, _ -> {
-      echo known
-      echo unknown
+      io.println("multiple content types not supported")
       just_return_ok_nil(wrapper)
     }
   }
@@ -938,8 +931,7 @@ fn gen_response(operation, components: oas.Components) {
       case more {
         [] -> Nil
         _ -> {
-          echo more
-          echo "ignoring some clauses"
+          io.print("Doesn't support multiple ok statuses")
           Nil
         }
       }
