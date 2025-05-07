@@ -4,7 +4,6 @@ title: no_content_response
 file: ./test/oas/generator/operations_test.gleam
 test_name: no_content_response_test
 ---
-import gleam/option
 import gleam/bool
 import gleam/result
 import gleam/dynamic/decode
@@ -15,6 +14,7 @@ import gleam/http/response
 import gleam/http
 import myservice/schema
 import myservice/utils
+import gleam/option.{type Option, None}
 
 pub fn get_users_request(base) {
   let method = http.Get

@@ -1,8 +1,6 @@
 ---
 version: 1.2.7
-title: array_parameters_response_test
-file: ./test/oas/generator/operations_test.gleam
-test_name: array_parameters_response_test
+title: single_inline_object_response_test
 ---
 import gleam/bool
 import gleam/result
@@ -16,15 +14,14 @@ import myservice/schema
 import myservice/utils
 import gleam/option.{type Option, None}
 
-pub fn get_users_request(base, tags tags) {
+pub type GetUsersResponse {
+  GetUsersResponse(items: List(String), thing: Option(schema.Thing))
+}
+
+pub fn get_users_request(base) {
   let method = http.Get
   let path = "/users"
-  let query = [
-    #(
-      "tags",
-      option.map(tags, fn(_) { panic as "query parameter is not supported" }),
-    )
-  ]
+  let query = []
   base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
     query,
   )
@@ -33,7 +30,15 @@ pub fn get_users_request(base, tags tags) {
 pub fn get_users_response(response) {
   let response.Response(status:, body:, ..) = response
   case status {
-    200 -> json.parse_bits(body, schema.account_decoder()) |> result.map(Ok)
+    200 -> json.parse_bits(body, {
+        use items <- decode.field("items", decode.list(decode.string))
+        use thing <- decode.optional_field(
+          "thing",
+          None,
+          decode.optional(schema.thing_decoder()),
+        )
+        decode.success(GetUsersResponse(items: items, thing: thing))
+      }) |> result.map(Ok)
     _ -> response |> Error |> Ok
   }
 }
