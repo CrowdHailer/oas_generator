@@ -1,11 +1,12 @@
 ---
 version: 1.2.7
 title: required_fields_test
-file: ./test/midas/gen_test.gleam
+file: ./test/oas/generator_test.gleam
 test_name: required_fields_test
 ---
 import gleam/option.{type Option, None}
 import gleam/json
+import gleam/dynamic
 import gleam/dynamic/decode
 
 pub type User {

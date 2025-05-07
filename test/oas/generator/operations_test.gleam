@@ -159,5 +159,47 @@ pub fn multiple_error_response_test() {
   let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "multiple_error_response_test")
 }
+
 // If error response structure looks the same
 // put under error
+
+pub fn alway_pass_test() {
+  let paths =
+    dict.from_list([
+      path("/users", [
+        get("get_users", [], None, [
+          #(oas.Status(200), json(oas.Inline(oas.AlwaysPasses))),
+        ]),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "alway_pass_test")
+}
+
+pub fn alway_field_pass_test() {
+  let paths =
+    dict.from_list([
+      path("/users", [
+        get("get_users", [], None, [
+          #(
+            oas.Status(200),
+            json(
+              oas.Inline(
+                object([#("meta", oas.Inline(oas.AlwaysPasses))], ["meta"]),
+              ),
+            ),
+          ),
+        ]),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "alway_field_pass_test")
+}

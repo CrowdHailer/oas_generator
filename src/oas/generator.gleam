@@ -107,6 +107,8 @@ fn gen_object(properties, required, name, module) {
             oas.Object(..) -> glance.NamedType("Nil", None, [])
             oas.AnyOf(..) | oas.AllOf(..) | oas.OneOf(..) ->
               glance.NamedType("Nil", None, [])
+            oas.AlwaysPasses -> glance.NamedType("Dynamic", Some("dynamic"), [])
+            oas.AlwaysFails -> glance.NamedType("Nil", None, [])
           }
         }
       }
@@ -148,6 +150,9 @@ fn schema_to_type(name, schema) {
     oas.AllOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
     oas.AnyOf(_items) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
     oas.OneOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
+    oas.AlwaysPasses(..) ->
+      Error(alias(type_, glance.NamedType("Dynamic", Some("dynamic"), [])))
+    oas.AlwaysFails -> Error(alias(type_, glance.NamedType("Nil", None, [])))
   }
 }
 
@@ -168,6 +173,8 @@ fn array_type(items, module) {
         oas.AnyOf(..) -> glance.NamedType("Nil", None, [])
         oas.AllOf(..) -> glance.NamedType("Nil", None, [])
         oas.OneOf(..) -> glance.NamedType("Nil", None, [])
+        oas.AlwaysPasses -> glance.NamedType("Dynamic", Some("dynamic"), [])
+        oas.AlwaysFails(..) -> glance.NamedType("Nil", None, [])
       }
   }
   glance.NamedType("List", None, [inner])
@@ -229,6 +236,10 @@ fn schema_to_encoder(entry) {
                   oas.Inline(oas.AllOf(_items)) -> noop1("AllOf inside field")
                   oas.Inline(oas.AnyOf(_items)) -> noop1("AnyOf inside field")
                   oas.Inline(oas.OneOf(_items)) -> noop1("OneOf inside field")
+                  oas.Inline(oas.AlwaysPasses) ->
+                    noop1("AlwaysPasses inside field")
+                  oas.Inline(oas.AlwaysFails) ->
+                    noop1("AlwaysFails inside field")
                 }
 
                 case is_optional(p, required) {
@@ -272,6 +283,8 @@ fn schema_to_encoder(entry) {
     oas.AllOf(..) -> glance.Panic(Some(glance.String("AllOf")))
     oas.AnyOf(..) -> glance.Panic(Some(glance.String("AnyOf")))
     oas.OneOf(..) -> glance.Panic(Some(glance.String("OneOf")))
+    oas.AlwaysPasses -> glance.Panic(Some(glance.String("AlwaysPasses")))
+    oas.AlwaysFails -> glance.Panic(Some(glance.String("Aloas.AlwaysFails")))
   }
   let ignored = case schema {
     oas.Null(..) -> True
@@ -318,6 +331,8 @@ fn array_encoder(items, top_level) {
         oas.AllOf(..) -> noop1("Alloas.AllOf in array")
         oas.AnyOf(..) -> noop1("Anyoas.AnyOf in array")
         oas.OneOf(..) -> noop1("Oneoas.OneOf in array")
+        oas.AlwaysPasses(..) -> noop1("AlwaysPasses in array")
+        oas.AlwaysFails(..) -> noop1("AlwaysFails in array")
       }
   }
   let arg = case top_level {
@@ -346,6 +361,21 @@ fn always_decode() {
   )
 }
 
+fn dynamic_decode() {
+  call2(
+    "decode",
+    "new_primitive_decoder",
+    glance.String("Dynamic"),
+    glance.Fn([glance.FnParameter(glance.Named("raw"), None)], None, [
+      glance.Expression(
+        glance.Call(glance.Variable("Ok"), [
+          glance.UnlabelledField(glance.Variable("raw")),
+        ]),
+      ),
+    ]),
+  )
+}
+
 fn is_nullable(schema) {
   case schema {
     oas.Ref(..) -> False
@@ -361,6 +391,8 @@ fn is_nullable(schema) {
         oas.AllOf(_) -> False
         oas.AnyOf(_) -> False
         oas.OneOf(_) -> False
+        oas.AlwaysPasses(..) -> False
+        oas.AlwaysFails(..) -> False
       }
   }
 }
@@ -411,6 +443,8 @@ fn schema_to_decoder(name, schema, module) {
             oas.Inline(oas.AllOf(..)) -> always_decode()
             oas.Inline(oas.AnyOf(..)) -> always_decode()
             oas.Inline(oas.OneOf(..)) -> always_decode()
+            oas.Inline(oas.AlwaysPasses) -> dynamic_decode()
+            oas.Inline(oas.AlwaysFails) -> always_decode()
           }
           let is_optional = !list.contains(required, key) || is_nullable(schema)
           #(
@@ -454,6 +488,10 @@ fn schema_to_decoder(name, schema, module) {
     oas.OneOf(..) -> [
       glance.Expression(glance.Panic(Some(glance.String("OneOf")))),
     ]
+    oas.AlwaysPasses(..) -> [glance.Expression(dynamic_decode())]
+    oas.AlwaysFails(..) -> [
+      glance.Expression(glance.Panic(Some(glance.String("Alwoas.AlwaysFails")))),
+    ]
   }
 }
 
@@ -477,6 +515,8 @@ fn array_decoder(items, module) {
         oas.AllOf(..) -> always_decode()
         oas.AnyOf(..) -> always_decode()
         oas.OneOf(..) -> always_decode()
+        oas.AlwaysPasses(..) -> dynamic_decode()
+        oas.AlwaysFails(..) -> always_decode()
       }
     }
   }
@@ -854,6 +894,7 @@ fn gen_json_content_handling(operation_id, schema, wrapper) {
         |> glance.Block()
       #(Some(resp_type), decoder)
     }
+    oas.Inline(oas.AlwaysPasses) -> #(None, dynamic_decode())
     _ -> {
       #(
         None,
@@ -1121,6 +1162,7 @@ pub fn gen_schema_file(schemas) {
   glance.Module(
     [
       glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
+      glance.Definition([], glance.Import("gleam/dynamic", None, [], [])),
       glance.Definition([], glance.Import("gleam/json", None, [], [])),
       glance.Definition(
         [],

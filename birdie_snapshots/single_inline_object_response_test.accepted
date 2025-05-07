@@ -1,6 +1,8 @@
 ---
 version: 1.2.7
 title: single_inline_object_response_test
+file: ./test/oas/generator/operations_test.gleam
+test_name: single_inline_object_response_test
 ---
 import gleam/bool
 import gleam/result

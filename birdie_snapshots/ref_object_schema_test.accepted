@@ -6,6 +6,7 @@ test_name: ref_object_schema_test
 ---
 import gleam/option.{type Option, None}
 import gleam/json
+import gleam/dynamic
 import gleam/dynamic/decode
 
 pub type User {
