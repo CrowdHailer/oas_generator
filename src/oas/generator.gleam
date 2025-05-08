@@ -214,20 +214,15 @@ fn schema_to_encoder(entry) {
             glance.Tuple([
               glance.String(key),
               {
-                let arg =
-                  glance.FieldAccess(glance.Variable("data"), var_name(key))
+                let arg = access("data", var_name(key))
                 let cast = case schema {
                   oas.Ref(ref: "#/components/schemas/" <> named, ..) ->
                     glance.Variable(encode_fn(named))
                   oas.Ref(ref:, ..) -> noop1("unknown ref name: " <> ref)
-                  oas.Inline(oas.Boolean(..)) ->
-                    glance.FieldAccess(glance.Variable("json"), "bool")
-                  oas.Inline(oas.Integer(..)) ->
-                    glance.FieldAccess(glance.Variable("json"), "int")
-                  oas.Inline(oas.Number(..)) ->
-                    glance.FieldAccess(glance.Variable("json"), "float")
-                  oas.Inline(oas.String(..)) ->
-                    glance.FieldAccess(glance.Variable("json"), "string")
+                  oas.Inline(oas.Boolean(..)) -> access("json", "bool")
+                  oas.Inline(oas.Integer(..)) -> access("json", "int")
+                  oas.Inline(oas.Number(..)) -> access("json", "float")
+                  oas.Inline(oas.String(..)) -> access("json", "string")
                   oas.Inline(oas.Null(..)) -> noop1("encode null in field")
                   oas.Inline(oas.Array(items:, ..)) ->
                     array_encoder(items, None)
@@ -237,7 +232,7 @@ fn schema_to_encoder(entry) {
                   oas.Inline(oas.AnyOf(_items)) -> noop1("AnyOf inside field")
                   oas.Inline(oas.OneOf(_items)) -> noop1("OneOf inside field")
                   oas.Inline(oas.AlwaysPasses) ->
-                    noop1("AlwaysPasses inside field")
+                    access("utils", "dynamic_to_json")
                   oas.Inline(oas.AlwaysFails) ->
                     noop1("AlwaysFails inside field")
                 }
@@ -283,7 +278,8 @@ fn schema_to_encoder(entry) {
     oas.AllOf(..) -> glance.Panic(Some(glance.String("AllOf")))
     oas.AnyOf(..) -> glance.Panic(Some(glance.String("AnyOf")))
     oas.OneOf(..) -> glance.Panic(Some(glance.String("OneOf")))
-    oas.AlwaysPasses -> glance.Panic(Some(glance.String("AlwaysPasses")))
+    oas.AlwaysPasses ->
+      call1("utils", "dynamic_to_json", glance.Variable("data"))
     oas.AlwaysFails -> glance.Panic(Some(glance.String("Aloas.AlwaysFails")))
   }
   let ignored = case schema {
@@ -331,7 +327,7 @@ fn array_encoder(items, top_level) {
         oas.AllOf(..) -> noop1("Alloas.AllOf in array")
         oas.AnyOf(..) -> noop1("Anyoas.AnyOf in array")
         oas.OneOf(..) -> noop1("Oneoas.OneOf in array")
-        oas.AlwaysPasses(..) -> noop1("AlwaysPasses in array")
+        oas.AlwaysPasses(..) -> access("utils", "dynamic_to_json")
         oas.AlwaysFails(..) -> noop1("AlwaysFails in array")
       }
   }
@@ -544,17 +540,15 @@ fn access(object_or_mod, field) {
 }
 
 fn call0(m, f) {
-  glance.Call(glance.FieldAccess(glance.Variable(m), f), [])
+  glance.Call(access(m, f), [])
 }
 
 fn call1(m, f, a) {
-  glance.Call(glance.FieldAccess(glance.Variable(m), f), [
-    glance.UnlabelledField(a),
-  ])
+  glance.Call(access(m, f), [glance.UnlabelledField(a)])
 }
 
 fn call2(m, f, a, b) {
-  glance.Call(glance.FieldAccess(glance.Variable(m), f), [
+  glance.Call(access(m, f), [
     glance.UnlabelledField(a),
     glance.UnlabelledField(b),
   ])
@@ -599,15 +593,15 @@ fn query_to_parts(parameters, components: oas.Components) {
 
 fn gen_method(method) {
   case method {
-    http.Get -> glance.FieldAccess(glance.Variable("http"), "Get")
-    http.Post -> glance.FieldAccess(glance.Variable("http"), "Post")
-    http.Head -> glance.FieldAccess(glance.Variable("http"), "Head")
-    http.Put -> glance.FieldAccess(glance.Variable("http"), "Put")
-    http.Delete -> glance.FieldAccess(glance.Variable("http"), "Delete")
-    http.Trace -> glance.FieldAccess(glance.Variable("http"), "Trace")
-    http.Connect -> glance.FieldAccess(glance.Variable("http"), "Connect")
-    http.Options -> glance.FieldAccess(glance.Variable("http"), "Options")
-    http.Patch -> glance.FieldAccess(glance.Variable("http"), "Patch")
+    http.Get -> access("http", "Get")
+    http.Post -> access("http", "Post")
+    http.Head -> access("http", "Head")
+    http.Put -> access("http", "Put")
+    http.Delete -> access("http", "Delete")
+    http.Trace -> access("http", "Trace")
+    http.Connect -> access("http", "Connect")
+    http.Options -> access("http", "Options")
+    http.Patch -> access("http", "Patch")
     http.Other(other) -> call1("http", "Other", glance.String(other))
   }
 }
@@ -787,19 +781,14 @@ fn gen_request_for_op(
         ),
         let_(
           "request",
-          glance.Call(
-            glance.FieldAccess(glance.Variable("operations"), op_request),
-            [
-              glance.UnlabelledField(glance.Variable("request")),
-              ..list.map(parameters, fn(p) {
-                let assert glance.FunctionParameter(
-                  name: glance.Named(name),
-                  ..,
-                ) = p
-                glance.UnlabelledField(glance.Variable(name))
-              })
-            ],
-          ),
+          glance.Call(access("operations", op_request), [
+            glance.UnlabelledField(glance.Variable("request")),
+            ..list.map(parameters, fn(p) {
+              let assert glance.FunctionParameter(name: glance.Named(name), ..) =
+                p
+              glance.UnlabelledField(glance.Variable(name))
+            })
+          ]),
         ),
         glance.Use(
           [glance.PatternVariable("response")],
@@ -1104,7 +1093,8 @@ pub fn build(spec_src, project_path, provider, exclude) {
   use Nil <- try(fs.write(module_path <> ".gleam", content))
 
   let content =
-    gen_schema_file(spec.components.schemas) |> bit_array.from_string()
+    gen_schema_file(spec.components.schemas, provider)
+    |> bit_array.from_string()
 
   use Nil <- try(fs.write(module_path <> "/schema.gleam", content))
   Ok(Nil)
@@ -1156,7 +1146,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   #(operations, entry)
 }
 
-pub fn gen_schema_file(schemas) {
+pub fn gen_schema_file(schemas, provider) {
   let #(custom_types, type_aliases, functions) = gen_schema(schemas)
 
   glance.Module(
@@ -1164,6 +1154,7 @@ pub fn gen_schema_file(schemas) {
       glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
       glance.Definition([], glance.Import("gleam/dynamic", None, [], [])),
       glance.Definition([], glance.Import("gleam/json", None, [], [])),
+      glance.Definition([], glance.Import(provider <> "/utils", None, [], [])),
       glance.Definition(
         [],
         glance.Import(

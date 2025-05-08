@@ -5,6 +5,7 @@ file: ./test/oas/generator_test.gleam
 test_name: nullable_fields_test
 ---
 import gleam/option.{type Option, None}
+import myservice/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode

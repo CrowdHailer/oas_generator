@@ -42,7 +42,7 @@ fn ref(thing) {
 }
 
 fn schema(schemas) {
-  gen.gen_schema_file(dict.from_list(schemas))
+  gen.gen_schema_file(dict.from_list(schemas), "myservice")
 }
 
 // Simple things don't become new custom types
