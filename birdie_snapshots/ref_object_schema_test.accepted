@@ -17,14 +17,6 @@ pub type User {
 pub type Fullname =
   String
 
-pub fn fullname_decoder() {
-  decode.string
-}
-
-pub fn fullname_encode(data: Fullname) {
-  json.string(data)
-}
-
 pub fn user_decoder() {
   use name <- decode.field("name", fullname_decoder())
   decode.success(User(name: name))
@@ -32,4 +24,12 @@ pub fn user_decoder() {
 
 pub fn user_encode(data: User) {
   json.object([#("name", fullname_encode(data.name))])
+}
+
+pub fn fullname_decoder() {
+  decode.string
+}
+
+pub fn fullname_encode(data: Fullname) {
+  json.string(data)
 }
