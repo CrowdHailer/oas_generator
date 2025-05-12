@@ -5,13 +5,15 @@ import gleam/dict
 import gleam/http
 import gleam/int
 import gleam/io
+import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result.{try}
 import gleam/string
 import justin
-import midas/node/file_system as fs
 import oas
+import simplifile
+import snag
 
 fn concat_path(match, root) {
   let #(str, rev) =
@@ -268,7 +270,7 @@ fn schema_to_encoder(entry) {
     //       let type_ = justin.pascal_case(name)
     //       let properties = dict.to_list(properties)
     //       Ok(
-    //         // #(gen_object(properties, type_, schemas), 
+    //         // #(gen_object(properties, type_, schemas),
     //         [
     //           gen_zero_decoder(properties, type_, schemas),
     //           gen_json_encoder(properties, type_, schemas),
@@ -1071,18 +1073,37 @@ fn defs(xs) {
 
 pub fn build(spec_src, project_path, provider, exclude) {
   let module_path = project_path <> "/src/" <> provider
-  use spec <- try(fs.read_json(spec_src, oas.decoder))
+  use file <- try(
+    simplifile.read(spec_src)
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Could not read file " <> spec_src),
+  )
+
+  use spec <- try(
+    json.decode(file, oas.decoder)
+    |> snag.map_error(json_decode_error_to_string),
+  )
 
   let #(operations, entry) =
     gen_operations_and_top_files(spec, provider, exclude)
 
-  use Nil <- try(fs.write(
-    module_path <> "/operations.gleam",
-    operations |> bit_array.from_string,
-  ))
+  let operations_module_file = module_path <> "/operations.gleam"
 
-  use mod <- try(fs.read(module_path <> ".gleam"))
-  let assert Ok(mod) = bit_array.to_string(mod)
+  use Nil <- try(
+    simplifile.write_bits(
+      operations_module_file,
+      operations |> bit_array.from_string,
+    )
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Could not write file " <> operations_module_file),
+  )
+
+  use mod <- try(
+    simplifile.read(module_path <> ".gleam")
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Could not read file " <> module_path <> ".gleam"),
+  )
+
   let split = "// GENERATED ---"
   let pre = case string.split_once(mod, split) {
     Ok(#(pre, _)) -> pre
@@ -1090,13 +1111,24 @@ pub fn build(spec_src, project_path, provider, exclude) {
   }
 
   let content = <<pre:utf8, split:utf8, "----------\n\n", entry:utf8>>
-  use Nil <- try(fs.write(module_path <> ".gleam", content))
+
+  use Nil <- try(
+    simplifile.write_bits(module_path <> ".gleam", content)
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Could not write file " <> module_path <> ".gleam"),
+  )
 
   let content =
     gen_schema_file(spec.components.schemas, provider)
     |> bit_array.from_string()
 
-  use Nil <- try(fs.write(module_path <> "/schema.gleam", content))
+  let schema_module_file = module_path <> "/schema.gleam"
+
+  use Nil <- try(
+    simplifile.write_bits(schema_module_file, content)
+    |> snag.map_error(simplifile.describe_error)
+    |> snag.context("Could not write file " <> schema_module_file),
+  )
   Ok(Nil)
 }
 
@@ -1171,4 +1203,14 @@ pub fn gen_schema_file(schemas, provider) {
     defs(functions),
   )
   |> glance_printer.print
+}
+
+pub fn json_decode_error_to_string(error: json.DecodeError) -> String {
+  case error {
+    json.UnexpectedEndOfInput -> "UnexpectedEndOfInput"
+    json.UnexpectedByte(str) -> "UnexpectedByte " <> str
+    json.UnexpectedSequence(str) -> "UnexpectedSequence " <> str
+    json.UnexpectedFormat(_errors) -> "UnexpectedFormat"
+    json.UnableToDecode(_errors) -> "UnableToDecode"
+  }
 }
