@@ -41,8 +41,6 @@ fn concat_path(match, root) {
               #("", prev)
             }
             _ -> {
-              // io.debug(schema)
-              // panic as "unsupported schema type for path segment"
               let prev = [glance.String(current <> "/"), ..prev]
               let prev = [glance.Variable(safe_snake_case(name)), ..prev]
               #("", prev)
@@ -250,33 +248,6 @@ fn schema_to_encoder(entry) {
         ),
       )
     }
-    //     oas.AllOf(parts) -> {
-    //       let properties =
-    //         list.fold(parts, dict.new(), fn(acc, part) {
-    //           case part {
-    //             oas.Inline(properties) -> properties
-    //             oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
-    //               let assert Ok(oas.Object(properties, ..)) =
-    //                 dict.get(schemas, name)
-    //               properties
-    //             }
-    //             oas.Ref(ref: ref, ..) -> {
-    //               io.debug(ref)
-    //               panic as "not valid ref"
-    //             }
-    //           }
-    //           |> dict.merge(acc)
-    //         })
-    //       let type_ = justin.pascal_case(name)
-    //       let properties = dict.to_list(properties)
-    //       Ok(
-    //         // #(gen_object(properties, type_, schemas),
-    //         [
-    //           gen_zero_decoder(properties, type_, schemas),
-    //           gen_json_encoder(properties, type_, schemas),
-    //         ],
-    //       )
-    //     }
     oas.AllOf(..) -> glance.Panic(Some(glance.String("AllOf")))
     oas.AnyOf(..) -> glance.Panic(Some(glance.String("AnyOf")))
     oas.OneOf(..) -> glance.Panic(Some(glance.String("OneOf")))
@@ -1080,7 +1051,7 @@ pub fn build(spec_src, project_path, provider, exclude) {
   )
 
   use spec <- try(
-    json.decode(file, oas.decoder)
+    json.parse(file, oas.decoder())
     |> snag.map_error(json_decode_error_to_string),
   )
 
@@ -1210,7 +1181,6 @@ pub fn json_decode_error_to_string(error: json.DecodeError) -> String {
     json.UnexpectedEndOfInput -> "UnexpectedEndOfInput"
     json.UnexpectedByte(str) -> "UnexpectedByte " <> str
     json.UnexpectedSequence(str) -> "UnexpectedSequence " <> str
-    json.UnexpectedFormat(_errors) -> "UnexpectedFormat"
     json.UnableToDecode(_errors) -> "UnableToDecode"
   }
 }
