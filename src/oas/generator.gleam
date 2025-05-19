@@ -2,6 +2,7 @@ import glance
 import glance_printer
 import gleam/bit_array
 import gleam/dict
+import gleam/dynamic/decode
 import gleam/http
 import gleam/int
 import gleam/io
@@ -1181,6 +1182,20 @@ pub fn json_decode_error_to_string(error: json.DecodeError) -> String {
     json.UnexpectedEndOfInput -> "UnexpectedEndOfInput"
     json.UnexpectedByte(str) -> "UnexpectedByte " <> str
     json.UnexpectedSequence(str) -> "UnexpectedSequence " <> str
-    json.UnableToDecode(_errors) -> "UnableToDecode"
+    json.UnableToDecode(errors) ->
+      "UnableToDecode " <> print_decode_errors(errors)
   }
+}
+
+fn print_decode_errors(errors) {
+  list.map(errors, fn(error) {
+    let decode.DecodeError(expected:, found:, path:) = error
+    "expected "
+    <> expected
+    <> " found "
+    <> found
+    <> " at "
+    <> string.join(path, "/")
+  })
+  |> string.join("\n")
 }
