@@ -26,7 +26,10 @@ fn concat_path(match, root) {
           case schema {
             oas.String(..) -> {
               let prev = [glance.String(current <> "/"), ..prev]
-              let prev = [glance.Variable(safe_snake_case(name)), ..prev]
+              let prev = [
+                glance.Variable(name_for_gleam_field_or_var(name)),
+                ..prev
+              ]
               #("", prev)
             }
             oas.Integer(..) -> {
@@ -35,7 +38,7 @@ fn concat_path(match, root) {
                 call1(
                   "int",
                   "to_string",
-                  glance.Variable(safe_snake_case(name)),
+                  glance.Variable(name_for_gleam_field_or_var(name)),
                 ),
                 ..prev
               ]
@@ -43,7 +46,10 @@ fn concat_path(match, root) {
             }
             _ -> {
               let prev = [glance.String(current <> "/"), ..prev]
-              let prev = [glance.Variable(safe_snake_case(name)), ..prev]
+              let prev = [
+                glance.Variable(name_for_gleam_field_or_var(name)),
+                ..prev
+              ]
               #("", prev)
             }
           }
@@ -61,28 +67,6 @@ fn concat_path(match, root) {
   a
 }
 
-fn escape_key(key) {
-  let key = case key {
-    "type" -> "type_"
-    "auto" -> "auto_"
-    "import" -> "import_"
-    // used in places
-    "base" -> "base_"
-    "path" -> "path_"
-    "method" -> "method_"
-    "token" -> "token_"
-    _ -> key
-  }
-  case key {
-    "_" <> key -> key
-    _ -> key
-  }
-  // github is weird
-  |> string.replace("-", "minus")
-  |> string.replace("+", "plus")
-  |> string.replace("1", "one")
-}
-
 fn is_optional(property, required) {
   let #(key, schema) = property
   !list.contains(required, key) || is_nullable(schema)
@@ -94,7 +78,7 @@ fn gen_object(properties, required, name, module) {
       let #(key, schema) = property
       let type_ = case schema {
         oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
-          glance.NamedType(justin.pascal_case(name), module, [])
+          glance.NamedType(name_for_gleam_type(name), module, [])
         }
         oas.Ref(..) -> panic as "unsupported ref"
         oas.Inline(schema) -> {
@@ -119,16 +103,13 @@ fn gen_object(properties, required, name, module) {
           False -> type_
           True -> glance.NamedType("Option", None, [type_])
         },
-        escape_key(justin.snake_case(key)),
+        name_for_gleam_field_or_var(key),
       )
     })
+  let name = name_for_gleam_type(name)
   glance.CustomType(name, glance.Public, False, [], [
     glance.Variant(name, fields),
   ])
-}
-
-fn var_name(from) {
-  escape_key(justin.snake_case(from))
 }
 
 fn alias(to, type_) {
@@ -137,7 +118,7 @@ fn alias(to, type_) {
 
 // Error is alias
 fn schema_to_type(name, schema) {
-  let type_ = justin.pascal_case(name)
+  let type_ = name_for_gleam_type(name)
   case schema {
     oas.Boolean(..) -> Error(alias(type_, glance.NamedType("Bool", None, [])))
     oas.Integer(..) -> Error(alias(type_, glance.NamedType("Int", None, [])))
@@ -160,7 +141,7 @@ fn schema_to_type(name, schema) {
 fn array_type(items, module) {
   let inner = case items {
     oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
-      glance.NamedType(justin.pascal_case(inner), module, [])
+      glance.NamedType(name_for_gleam_type(inner), module, [])
     oas.Ref(..) -> panic as "unexpected ref"
     oas.Inline(inner) ->
       case inner {
@@ -182,7 +163,7 @@ fn array_type(items, module) {
 }
 
 fn encode_fn(name) {
-  safe_snake_case(name) <> "_encode"
+  name_for_gleam_field_or_var(name <> "_encode")
 }
 
 fn noop1(message) {
@@ -193,7 +174,7 @@ fn noop1(message) {
 
 fn schema_to_encoder(entry) {
   let #(name, schema) = entry
-  let type_ = justin.pascal_case(name)
+  let type_ = name_for_gleam_type(name)
 
   let exp = case schema {
     oas.Boolean(..) -> call1("json", "bool", glance.Variable("data"))
@@ -215,7 +196,7 @@ fn schema_to_encoder(entry) {
             glance.Tuple([
               glance.String(key),
               {
-                let arg = access("data", var_name(key))
+                let arg = access("data", name_for_gleam_field_or_var(key))
                 let cast = case schema {
                   oas.Ref(ref: "#/components/schemas/" <> named, ..) ->
                     glance.Variable(encode_fn(named))
@@ -313,7 +294,7 @@ fn array_encoder(items, top_level) {
 }
 
 fn decoder(name) {
-  safe_snake_case(name) <> "_decoder"
+  name_for_gleam_field_or_var(name <> "_decoder")
 }
 
 fn always_decode() {
@@ -382,7 +363,7 @@ fn schema_to_decode_fn(entry) {
 }
 
 fn schema_to_decoder(name, schema, module) {
-  let type_ = justin.pascal_case(name)
+  let type_ = name_for_gleam_type(name)
   case schema {
     oas.Boolean(..) -> [glance.Expression(access("decode", "bool"))]
     oas.Integer(..) -> [glance.Expression(access("decode", "int"))]
@@ -419,7 +400,7 @@ fn schema_to_decoder(name, schema, module) {
           let is_optional = !list.contains(required, key) || is_nullable(schema)
           #(
             glance.Use(
-              [glance.PatternVariable(var_name(key))],
+              [glance.PatternVariable(name_for_gleam_field_or_var(key))],
               case is_optional {
                 False ->
                   call2("decode", "field", glance.String(key), field_decoder)
@@ -435,7 +416,10 @@ fn schema_to_decoder(name, schema, module) {
                   ])
               },
             ),
-            glance.LabelledField(var_name(key), glance.Variable(var_name(key))),
+            glance.LabelledField(
+              name_for_gleam_field_or_var(key),
+              glance.Variable(name_for_gleam_field_or_var(key)),
+            ),
           )
         })
         |> list.unzip
@@ -536,7 +520,7 @@ fn query_to_parts(parameters, components: oas.Components) {
   list.map(parameters, fn(p) {
     let #(key, required, schema) = p
     let schema = oas.fetch_schema(schema, components.schemas)
-    let key = safe_snake_case(key) |> escape_key
+    let key = name_for_gleam_field_or_var(key)
     let arg = glance.FunctionParameter(Some(key), glance.Named(key), None)
     let var = glance.Variable(key)
 
@@ -591,7 +575,7 @@ fn path_args(match) {
       oas.MatchSegment(name, _schema) ->
         Ok(glance.FunctionParameter(
           None,
-          glance.Named(safe_snake_case(name)),
+          glance.Named(name_for_gleam_field_or_var(name)),
           None,
         ))
     }
@@ -621,7 +605,7 @@ fn gen_request_for_op(
 ) {
   let #(method, op) = op_entry
   let oas.Operation(operation_id: id, parameters: op_parameters, ..) = op
-  let id = safe_snake_case(id)
+  let id = name_for_gleam_field_or_var(id)
 
   let parameters = list.append(op_parameters, path_parameters)
   let parameters =
@@ -646,7 +630,7 @@ fn gen_request_for_op(
         [#(_, oas.MediaType(schema))], _ ->
           case schema {
             oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
-              let arg = safe_snake_case(name)
+              let arg = name_for_gleam_field_or_var(name)
               let encode =
                 call1(
                   "utils",
@@ -789,10 +773,71 @@ fn gen_request_for_op(
   #(fn_, req_fn)
 }
 
-fn safe_snake_case(in) {
-  justin.snake_case(in)
+fn replace_gleam_keywords(key) {
+  case key {
+    "type" -> "type_"
+    "auto" -> "auto_"
+    "import" -> "import_"
+    // used in places
+    "base" -> "base_"
+    "path" -> "path_"
+    "method" -> "method_"
+    "token" -> "token_"
+    _ -> key
+  }
+  // case key {
+  //   "_" <> key -> key
+  //   _ -> key
+  // }
+  // // github is weird
+}
+
+fn replace_disallowed_charachters(in) {
+  in
   |> string.replace("/", "_")
-  |> escape_key
+  |> string.replace("+", "_")
+  // this is part of kebab casing
+  // |> string.replace("-", "Minus")
+}
+
+fn prefix_numbers(in) {
+  let needs_prefix =
+    list.any(
+      ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+      string.starts_with(in, _),
+    )
+  case needs_prefix {
+    True -> "n" <> in
+    False -> in
+  }
+}
+
+fn prefix_signs(in) {
+  let in = case string.starts_with(in, "-") {
+    True -> "negative" <> in
+    False -> in
+  }
+  case string.starts_with(in, "+") {
+    True -> "positive" <> in
+    False -> in
+  }
+}
+
+pub fn name_for_gleam_type(in) {
+  in
+  |> prefix_numbers
+  |> prefix_signs
+  |> replace_disallowed_charachters
+  |> justin.pascal_case()
+}
+
+pub fn name_for_gleam_field_or_var(in) {
+  in
+  |> prefix_numbers
+  |> prefix_signs
+  |> replace_disallowed_charachters
+  |> justin.snake_case()
+  |> replace_gleam_keywords()
 }
 
 fn gen_content_handling(operation_id, content, wrapper) {
@@ -835,22 +880,17 @@ fn gen_json_content_handling(operation_id, schema, wrapper) {
       call1(
         "decode",
         "list",
-        call0("schema", safe_snake_case(name) <> "_decoder"),
+        call0("schema", name_for_gleam_field_or_var(name <> "_decoder")),
       ),
     )
     oas.Ref(ref: "#/components/schemas/" <> name, ..) -> #(
       None,
-      call0("schema", safe_snake_case(name) <> "_decoder"),
+      call0("schema", name_for_gleam_field_or_var(name <> "_decoder")),
     )
     oas.Inline(oas.Object(properties:, required:, ..) as schema) -> {
       let name = operation_id <> "_response"
       let resp_type =
-        gen_object(
-          dict.to_list(properties),
-          required,
-          justin.pascal_case(name),
-          Some("schema"),
-        )
+        gen_object(dict.to_list(properties), required, name, Some("schema"))
 
       let decoder =
         schema_to_decoder(name, schema, Some("schema"))
@@ -979,7 +1019,7 @@ fn gen_response(operation, components: oas.Components) {
 
   let response_handler =
     glance.Function(
-      name: safe_snake_case(op.operation_id) <> "_response",
+      name: name_for_gleam_field_or_var(op.operation_id <> "_response"),
       publicity: glance.Public,
       parameters: [
         glance.FunctionParameter(None, glance.Named("response"), None),
@@ -1022,15 +1062,11 @@ fn gen_fns(key, path_item: oas.PathItem, components, exclude) {
     })
 
   list.map(operations, fn(op) {
-    // gen_request_for_op(op, key, path_item.parameters, components)
-    // |> list.append([gen_response(op, components)])
-    // |> list.reverse
     let #(fn_, req_fn) =
       gen_request_for_op(op, key, path_item.parameters, components)
     let #(response_handler, response_type) = gen_response(op, components)
     #(#([response_handler, req_fn], response_type), fn_)
   })
-  // |> list.unzip
 }
 
 fn gen_ops(op, components, exclude) {
