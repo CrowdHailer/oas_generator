@@ -825,18 +825,19 @@ fn prefix_signs(in) {
 
 pub fn name_for_gleam_type(in) {
   in
-  |> prefix_numbers
   |> prefix_signs
-  |> replace_disallowed_charachters
   |> justin.pascal_case()
+  |> prefix_numbers
+  |> replace_disallowed_charachters
 }
 
 pub fn name_for_gleam_field_or_var(in) {
   in
-  |> prefix_numbers
   |> prefix_signs
-  |> replace_disallowed_charachters
+  // calling snake case might remove a leading `_` and expose numbers
   |> justin.snake_case()
+  |> prefix_numbers
+  |> replace_disallowed_charachters
   |> replace_gleam_keywords()
 }
 
