@@ -17,6 +17,11 @@ import oas/generator/lift
 import simplifile
 import snag
 
+pub type Module {
+  Schema
+  Operations
+}
+
 fn concat_path(match, root) {
   let #(str, rev) =
     list.fold(match, #(root, []), fn(acc, segment) {
@@ -203,17 +208,33 @@ fn dynamic_decode() {
 fn schema_to_decode_fn(entry) {
   let #(name, top) = entry
 
-  let body = case top {
-    lift.Named(n) -> [glance.Expression(to_decoder(lift.Named(n)))]
-    lift.Primitive(p) -> [glance.Expression(to_decoder(lift.Primitive(p)))]
-    lift.Array(items) -> [glance.Expression(to_decoder(lift.Array(items)))]
+  let body = gen_top_decoder_needs_name(name, top, Schema)
+  glance.Function(
+    name: decoder(name),
+    publicity: glance.Public,
+    parameters: [],
+    return: None,
+    body:,
+    location: glance.Span(0, 0),
+  )
+}
+
+fn gen_top_decoder_needs_name(name, top, module) {
+  case top {
+    lift.Named(n) -> [glance.Expression(to_decoder(lift.Named(n), module))]
+    lift.Primitive(p) -> [
+      glance.Expression(to_decoder(lift.Primitive(p), module)),
+    ]
+    lift.Array(items) -> [
+      glance.Expression(to_decoder(lift.Array(items), module)),
+    ]
     lift.Compound(lift.Fields(properties, required)) -> {
       let type_ = name_for_gleam_type(name)
       let #(fields, cons) =
         list.map(properties, fn(property) {
           let #(key, #(schema, nullable)) = property
           let is_optional = !list.contains(required, key) || nullable
-          let field_decoder = to_decoder(schema)
+          let field_decoder = to_decoder(schema, module)
           #(
             glance.Use(
               [glance.PatternVariable(name_for_gleam_field_or_var(key))],
@@ -250,17 +271,10 @@ fn schema_to_decode_fn(entry) {
       list.append(fields, [final])
     }
   }
-  glance.Function(
-    name: decoder(name),
-    publicity: glance.Public,
-    parameters: [],
-    return: None,
-    body:,
-    location: glance.Span(0, 0),
-  )
 }
 
 fn gen_schema(schemas) {
+  let module = Schema
   // map fold through all the internal
   dict.fold(schemas, #([], [], []), fn(acc, name, schema) {
     let #(top, _nullable, _acc) = lift.lift(oas.Inline(schema))
@@ -277,15 +291,15 @@ fn gen_schema(schemas) {
         todo
       }
       lift.Primitive(primitive) -> {
-        let type_ = to_type(lift.Primitive(primitive))
+        let type_ = to_type(lift.Primitive(primitive), module)
         #(custom_types, [alias(name, type_), ..type_aliases])
       }
       lift.Array(items) -> {
-        let type_ = to_type(lift.Array(items))
+        let type_ = to_type(lift.Array(items), module)
         #(custom_types, [alias(name, type_), ..type_aliases])
       }
       lift.Compound(lift.Fields(properties, required)) -> {
-        let type_ = custom_type(name, properties, required)
+        let type_ = custom_type(name, properties, required, module)
         #([type_, ..custom_types], type_aliases)
       }
     }
@@ -293,11 +307,11 @@ fn gen_schema(schemas) {
   })
 }
 
-fn custom_type(name, properties, required) {
+fn custom_type(name, properties, required, module) {
   let fields =
     list.map(properties, fn(property) {
       let #(key, #(schema, nullable)) = property
-      let type_ = to_type(schema)
+      let type_ = to_type(schema, module)
 
       glance.LabelledVariantField(
         case !list.contains(required, key) || nullable {
@@ -307,20 +321,20 @@ fn custom_type(name, properties, required) {
         name_for_gleam_field_or_var(key),
       )
     })
+  let name = name_for_gleam_type(name)
   glance.CustomType(name, glance.Public, False, [], [
     glance.Variant(name, fields),
   ])
 }
 
-fn to_type(lifted) {
-  let module_to_find_schema_types_in = None
+fn to_type(lifted, module) {
   case lifted {
     lift.Named("#/components/schemas/" <> inner) -> {
-      glance.NamedType(
-        name_for_gleam_type(inner),
-        module_to_find_schema_types_in,
-        [],
-      )
+      let mod = case module {
+        Schema -> None
+        _ -> Some("schema")
+      }
+      glance.NamedType(name_for_gleam_type(inner), mod, [])
     }
     lift.Primitive(primitive) -> {
       case primitive {
@@ -329,11 +343,12 @@ fn to_type(lifted) {
         lift.Number -> glance.NamedType("Float", None, [])
         lift.String -> glance.NamedType("String", None, [])
         lift.Null -> glance.NamedType("Null", None, [])
-        lift.Always -> glance.NamedType("Always", None, [])
+        lift.Always -> glance.NamedType("Dynamic", Some("dynamic"), [])
         lift.Never -> glance.NamedType("Never", None, [])
       }
     }
-    lift.Array(items) -> glance.NamedType("List", None, [to_type(items)])
+    lift.Array(items) ->
+      glance.NamedType("List", None, [to_type(items, module)])
     _ -> {
       echo lifted
       todo
@@ -690,17 +705,23 @@ pub fn name_for_gleam_field_or_var(in) {
 }
 
 fn gen_content_handling(operation_id, content, wrapper) {
+  let module = Operations
   let #(known, unknown) = get_structure_json_media(content)
   case known, unknown {
     [#(_, oas.MediaType(schema))], _ -> {
-      let decoder = case lift.lift(schema) {
-        #(lift.Named(n), _, []) -> to_decoder(lift.Named(n))
-        #(lift.Primitive(p), _, []) -> to_decoder(lift.Primitive(p))
-        #(lift.Array(a), _, []) -> to_decoder(lift.Array(a))
-        #(lift.Compound(lift.Fields(parameters, required)), _, []) -> {
+      let #(decoder, resp_type) = case lift.lift(schema) {
+        #(lift.Named(n), _, []) -> #(to_decoder(lift.Named(n), module), None)
+        #(lift.Primitive(p), _, []) -> #(
+          to_decoder(lift.Primitive(p), module),
+          None,
+        )
+        #(lift.Array(a), _, []) -> #(to_decoder(lift.Array(a), module), None)
+        #(lift.Compound(lift.Fields(parameters, required)) as top, _, []) -> {
           let name = operation_id <> "_response"
-          custom_type(name, parameters, required)
-          todo
+          let type_ = custom_type(name, parameters, required, Operations)
+          let decoder =
+            glance.Block(gen_top_decoder_needs_name(name, top, module))
+          #(decoder, Some(type_))
         }
         #(_, _, _) -> todo as "extra types"
       }
@@ -708,7 +729,7 @@ fn gen_content_handling(operation_id, content, wrapper) {
         call2("json", "parse_bits", glance.Variable("body"), decoder)
         |> pipe(call1("result", "map", glance.Variable(wrapper)))
       // True because the body is used
-      let resp_type = None
+
       #(action, resp_type, True)
       // gen_json_content_handling(operation_id, schema, wrapper)
     }
@@ -725,10 +746,15 @@ fn gen_content_handling(operation_id, content, wrapper) {
   }
 }
 
-fn to_decoder(lifted) {
+fn to_decoder(lifted, module) {
   case lifted {
-    lift.Named("#/components/schemas/" <> name) ->
-      call0("schema", name_for_gleam_field_or_var(name <> "_decoder"))
+    lift.Named("#/components/schemas/" <> name) -> {
+      let func = name_for_gleam_field_or_var(name <> "_decoder")
+      case module {
+        Schema -> glance.Call(glance.Variable(func), [])
+        _ -> call0("schema", func)
+      }
+    }
     lift.Named(..) -> todo as "bad name"
     lift.Primitive(primitive) ->
       case primitive {
@@ -740,7 +766,7 @@ fn to_decoder(lifted) {
         lift.Always -> dynamic_decode()
         lift.Never -> todo
       }
-    lift.Array(items) -> call1("decode", "list", to_decoder(items))
+    lift.Array(items) -> call1("decode", "list", to_decoder(items, module))
     lift.Compound(fields) -> todo as "compound"
   }
 }
@@ -752,56 +778,6 @@ fn just_return_ok_nil(wrapper) {
     ])
     |> pipe(glance.Variable("Ok"))
   #(thing, None, False)
-}
-
-fn gen_json_content_handling(operation_id, schema, wrapper) {
-  let #(resp_type, decoder) = case schema {
-    oas.Inline(oas.Array(
-      items: oas.Ref(
-        ref: "#/components/schemas/" <> name,
-        ..,
-      ),
-      ..,
-    )) -> #(
-      None,
-      call1(
-        "decode",
-        "list",
-        call0("schema", name_for_gleam_field_or_var(name <> "_decoder")),
-      ),
-    )
-    oas.Ref(ref: "#/components/schemas/" <> name, ..) -> #(
-      None,
-      call0("schema", name_for_gleam_field_or_var(name <> "_decoder")),
-    )
-    oas.Inline(oas.Object(properties:, required:, ..) as schema) -> {
-      let name = operation_id <> "_response"
-      let resp_type = todo
-      // gen_object(dict.to_list(properties), required, name, Some("schema"))
-
-      let decoder = todo
-      // schema_to_decoder(name, schema, Some("schema"))
-      // |> glance.Block()
-      #(Some(resp_type), decoder)
-    }
-    oas.Inline(oas.AlwaysPasses) -> #(None, dynamic_decode())
-    _ -> {
-      #(
-        None,
-        call2(
-          "decode",
-          "failure",
-          glance.Variable("Nil"),
-          glance.String("Unsupported schema"),
-        ),
-      )
-    }
-  }
-  let action =
-    call2("json", "parse_bits", glance.Variable("body"), decoder)
-    |> pipe(call1("result", "map", glance.Variable(wrapper)))
-  // True because the body is used
-  #(action, resp_type, True)
 }
 
 fn status_range(responses, above_equal, bellow) {
