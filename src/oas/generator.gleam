@@ -96,7 +96,17 @@ fn to_encoder(lifted) {
     lift.Primitive(lift.Integer) -> access("json", "int")
     lift.Primitive(lift.Number) -> access("json", "float")
     lift.Primitive(lift.String) -> access("json", "string")
-    lift.Primitive(lift.Null) -> noop1("null in array")
+    lift.Primitive(lift.Null) ->
+      glance.Fn(
+        [
+          glance.FnParameter(
+            glance.Discarded(""),
+            Some(glance.NamedType("Nil", None, [])),
+          ),
+        ],
+        None,
+        [glance.Expression(call0("json", "null"))],
+      )
     lift.Primitive(lift.Always) -> todo
     lift.Primitive(lift.Never) -> todo
     lift.Array(items) -> {

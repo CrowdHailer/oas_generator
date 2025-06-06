@@ -46,6 +46,11 @@ fn schema(schemas) {
   gen.gen_schema_file(dict.from_list(schemas), "myservice")
 }
 
+pub fn nil_alias_test() {
+  schema([#("other_nil", oas.Null(None, None, False))])
+  |> birdie.snap(title: "nil_alias_test")
+}
+
 // Simple things don't become new custom types
 pub fn simple_string_schema_test() {
   schema([#("my_string", just_string)])
