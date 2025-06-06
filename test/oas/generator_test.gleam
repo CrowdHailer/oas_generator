@@ -136,14 +136,15 @@ pub fn nested_object_test() {
   ])
   |> birdie.snap(title: "nested_object_test")
 }
-// pub fn allof_named_test() {
-//   schema([
-//     #("A", object([#("a", oas.Inline(just_string))], ["a"])),
-//     #("B", object([#("b", oas.Inline(just_string))], ["b"])),
-//     #("Both", oas.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
-//   ])
-//   |> birdie.snap(title: "allof_named_test")
-// }
+
+pub fn allof_named_test() {
+  schema([
+    #("A", object([#("a", oas.Inline(just_string))], ["a"])),
+    #("B", object([#("b", oas.Inline(just_string))], ["b"])),
+    #("Both", oas.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
+  ])
+  |> birdie.snap(title: "allof_named_test")
+}
 // // pub fn single_allof_test() -> Nil {
 // //   todo
 // // }

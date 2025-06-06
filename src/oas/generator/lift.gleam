@@ -7,6 +7,7 @@ pub type Schema(t) {
   Named(String)
   Primitive(Primitive)
   Array(Lifted)
+  Tuple(List(Lifted))
   // Should be renamed custom with named fields
   Compound(t)
 }
@@ -51,6 +52,7 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
     Named(name) -> #(Named(name), acc)
     Primitive(primitive) -> #(Primitive(primitive), acc)
     Array(items) -> #(Array(items), acc)
+    Tuple(items) -> #(Tuple(items), acc)
   }
 }
 
