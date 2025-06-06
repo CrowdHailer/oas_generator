@@ -68,11 +68,6 @@ fn concat_path(match, root) {
   a
 }
 
-fn is_optional(property, required) {
-  let #(key, schema) = property
-  !list.contains(required, key) || is_nullable(schema)
-}
-
 fn alias(to, type_) {
   glance.TypeAlias(to, glance.Public, [], type_)
 }
@@ -205,80 +200,20 @@ fn dynamic_decode() {
   )
 }
 
-fn is_nullable(schema) {
-  case schema {
-    oas.Ref(..) -> False
-    oas.Inline(schema) ->
-      case schema {
-        oas.Boolean(nullable:, ..) -> nullable
-        oas.Integer(nullable:, ..) -> nullable
-        oas.Number(nullable:, ..) -> nullable
-        oas.String(nullable:, ..) -> nullable
-        oas.Null(..) -> False
-        oas.Array(nullable:, ..) -> nullable
-        oas.Object(nullable:, ..) -> nullable
-        oas.AllOf(_) -> False
-        oas.AnyOf(_) -> False
-        oas.OneOf(_) -> False
-        oas.AlwaysPasses(..) -> False
-        oas.AlwaysFails(..) -> False
-      }
-  }
-}
-
 fn schema_to_decode_fn(entry) {
-  let #(name, schema) = entry
+  let #(name, top) = entry
 
-  let body = schema_to_decoder(name, schema, None)
-  glance.Function(
-    name: decoder(name),
-    publicity: glance.Public,
-    parameters: [],
-    return: None,
-    body:,
-    location: glance.Span(0, 0),
-  )
-}
-
-fn schema_to_decoder(name, schema, module_to_find_schema_types_in) {
-  let type_ = name_for_gleam_type(name)
-  case schema {
-    oas.Boolean(..) -> [glance.Expression(access("decode", "bool"))]
-    oas.Integer(..) -> [glance.Expression(access("decode", "int"))]
-    oas.Number(..) -> [glance.Expression(access("decode", "float"))]
-    oas.String(..) -> [glance.Expression(access("decode", "string"))]
-    oas.Null(..) -> [glance.Expression(always_decode())]
-    oas.Array(items:, ..) -> [
-      glance.Expression(array_decoder(items, module_to_find_schema_types_in)),
-    ]
-    oas.Object(properties:, required:, ..) -> {
-      let properties = dict.to_list(properties)
+  let body = case top {
+    lift.Named(n) -> [glance.Expression(to_decoder(lift.Named(n)))]
+    lift.Primitive(p) -> [glance.Expression(to_decoder(lift.Primitive(p)))]
+    lift.Array(items) -> [glance.Expression(to_decoder(lift.Array(items)))]
+    lift.Compound(lift.Fields(properties, required)) -> {
+      let type_ = name_for_gleam_type(name)
       let #(fields, cons) =
         list.map(properties, fn(property) {
-          let #(key, schema) = property
-
-          let field_decoder = case schema {
-            oas.Ref(ref: "#/components/schemas/" <> s, ..) ->
-              case module_to_find_schema_types_in {
-                Some(m) -> call0(m, decoder(s))
-                None -> glance.Call(glance.Variable(decoder(s)), [])
-              }
-            oas.Ref(..) -> panic as "unknown ref"
-            oas.Inline(oas.Boolean(..)) -> access("decode", "bool")
-            oas.Inline(oas.Integer(..)) -> access("decode", "int")
-            oas.Inline(oas.Number(..)) -> access("decode", "float")
-            oas.Inline(oas.String(..)) -> access("decode", "string")
-            oas.Inline(oas.Null(..)) -> always_decode()
-            oas.Inline(oas.Array(items:, ..)) ->
-              array_decoder(items, module_to_find_schema_types_in)
-            oas.Inline(oas.Object(..)) -> always_decode()
-            oas.Inline(oas.AllOf(..)) -> always_decode()
-            oas.Inline(oas.AnyOf(..)) -> always_decode()
-            oas.Inline(oas.OneOf(..)) -> always_decode()
-            oas.Inline(oas.AlwaysPasses) -> dynamic_decode()
-            oas.Inline(oas.AlwaysFails) -> always_decode()
-          }
-          let is_optional = !list.contains(required, key) || is_nullable(schema)
+          let #(key, #(schema, nullable)) = property
+          let is_optional = !list.contains(required, key) || nullable
+          let field_decoder = to_decoder(schema)
           #(
             glance.Use(
               [glance.PatternVariable(name_for_gleam_field_or_var(key))],
@@ -314,49 +249,15 @@ fn schema_to_decoder(name, schema, module_to_find_schema_types_in) {
         )
       list.append(fields, [final])
     }
-    oas.AllOf(..) -> [
-      glance.Expression(glance.Panic(Some(glance.String("AllOf")))),
-    ]
-    oas.AnyOf(..) -> [
-      glance.Expression(glance.Panic(Some(glance.String("AnyOf")))),
-    ]
-    oas.OneOf(..) -> [
-      glance.Expression(glance.Panic(Some(glance.String("OneOf")))),
-    ]
-    oas.AlwaysPasses(..) -> [glance.Expression(dynamic_decode())]
-    oas.AlwaysFails(..) -> [
-      glance.Expression(glance.Panic(Some(glance.String("Alwoas.AlwaysFails")))),
-    ]
   }
-}
-
-fn array_decoder(items, module_to_find_schema_types_in) {
-  let exp = case items {
-    oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
-      case module_to_find_schema_types_in {
-        Some(m) -> call0(m, decoder(inner))
-        None -> glance.Call(glance.Variable(decoder(inner)), [])
-      }
-    oas.Ref(..) -> panic as "what is this s ref"
-    oas.Inline(inner) -> {
-      case inner {
-        oas.Boolean(..) -> access("decode", "bool")
-        oas.Integer(..) -> access("decode", "int")
-        oas.Number(..) -> access("decode", "float")
-        oas.String(..) -> access("decode", "string")
-        oas.Null(..) -> always_decode()
-        oas.Array(items:, ..) ->
-          array_decoder(items, module_to_find_schema_types_in)
-        oas.Object(..) -> always_decode()
-        oas.AllOf(..) -> always_decode()
-        oas.AnyOf(..) -> always_decode()
-        oas.OneOf(..) -> always_decode()
-        oas.AlwaysPasses(..) -> dynamic_decode()
-        oas.AlwaysFails(..) -> always_decode()
-      }
-    }
-  }
-  call1("decode", "list", exp)
+  glance.Function(
+    name: decoder(name),
+    publicity: glance.Public,
+    parameters: [],
+    return: None,
+    body:,
+    location: glance.Span(0, 0),
+  )
 }
 
 fn gen_schema(schemas) {
@@ -367,7 +268,7 @@ fn gen_schema(schemas) {
     let fns =
       list.append(fns, [
         schema_to_encoder(#(name, top)),
-        schema_to_decode_fn(#(name, schema)),
+        schema_to_decode_fn(#(name, top)),
       ])
     let name = name_for_gleam_type(name)
     let #(custom_types, type_aliases) = case top {
@@ -831,10 +732,15 @@ fn to_decoder(lifted) {
     lift.Named(..) -> todo as "bad name"
     lift.Primitive(primitive) ->
       case primitive {
+        lift.Boolean -> access("decode", "bool")
+        lift.Integer -> access("decode", "int")
+        lift.Number -> access("decode", "float")
+        lift.String -> access("decode", "string")
+        lift.Null -> always_decode()
         lift.Always -> dynamic_decode()
-        _ -> todo as "somthing"
+        lift.Never -> todo
       }
-    lift.Array(items) -> todo as "array"
+    lift.Array(items) -> call1("decode", "list", to_decoder(items))
     lift.Compound(fields) -> todo as "compound"
   }
 }
@@ -873,9 +779,9 @@ fn gen_json_content_handling(operation_id, schema, wrapper) {
       let resp_type = todo
       // gen_object(dict.to_list(properties), required, name, Some("schema"))
 
-      let decoder =
-        schema_to_decoder(name, schema, Some("schema"))
-        |> glance.Block()
+      let decoder = todo
+      // schema_to_decoder(name, schema, Some("schema"))
+      // |> glance.Block()
       #(Some(resp_type), decoder)
     }
     oas.Inline(oas.AlwaysPasses) -> #(None, dynamic_decode())
