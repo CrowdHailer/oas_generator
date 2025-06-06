@@ -1,6 +1,7 @@
 import birdie
 import gleam/dict
 import gleam/option.{None}
+import non_empty_list.{NonEmptyList}
 import oas
 import oas/generator as gen
 
@@ -100,3 +101,14 @@ pub fn ref_object_schema_test() {
   ])
   |> birdie.snap(title: "ref_object_schema_test")
 }
+// pub fn allof_named_test() {
+//   schema([
+//     #("A", object([#("a", oas.Inline(just_string))], ["a"])),
+//     #("B", object([#("b", oas.Inline(just_string))], ["b"])),
+//     #("Both", oas.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
+//   ])
+//   |> birdie.snap(title: "allof_named_test")
+// }
+// // pub fn single_allof_test() -> Nil {
+// //   todo
+// // }

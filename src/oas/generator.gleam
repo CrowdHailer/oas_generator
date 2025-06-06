@@ -13,6 +13,7 @@ import gleam/result.{try}
 import gleam/string
 import justin
 import oas
+import oas/generator/lift
 import simplifile
 import snag
 
@@ -72,13 +73,17 @@ fn is_optional(property, required) {
   !list.contains(required, key) || is_nullable(schema)
 }
 
-fn gen_object(properties, required, name, module) {
+fn gen_object(properties, required, name, module_to_find_schema_types_in) {
   let fields =
     list.map(properties, fn(property) {
       let #(key, schema) = property
       let type_ = case schema {
         oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
-          glance.NamedType(name_for_gleam_type(name), module, [])
+          glance.NamedType(
+            name_for_gleam_type(name),
+            module_to_find_schema_types_in,
+            [],
+          )
         }
         oas.Ref(..) -> panic as "unsupported ref"
         oas.Inline(schema) -> {
@@ -88,8 +93,10 @@ fn gen_object(properties, required, name, module) {
             oas.Number(..) -> glance.NamedType("Float", None, [])
             oas.String(..) -> glance.NamedType("String", None, [])
             oas.Null(..) -> glance.NamedType("Nil", None, [])
-            oas.Array(items:, ..) -> array_type(items, module)
-            oas.Object(..) -> glance.NamedType("Nil", None, [])
+            oas.Array(items:, ..) ->
+              array_type(items, module_to_find_schema_types_in)
+            oas.Object(..) -> todo as "obj in array"
+            //  glance.NamedType("Nil", None, [])
             oas.AnyOf(..) | oas.AllOf(..) | oas.OneOf(..) ->
               glance.NamedType("Nil", None, [])
             oas.AlwaysPasses -> glance.NamedType("Dynamic", Some("dynamic"), [])
@@ -116,32 +123,14 @@ fn alias(to, type_) {
   glance.TypeAlias(to, glance.Public, [], type_)
 }
 
-// Error is alias
-fn schema_to_type(name, schema) {
-  let type_ = name_for_gleam_type(name)
-  case schema {
-    oas.Boolean(..) -> Error(alias(type_, glance.NamedType("Bool", None, [])))
-    oas.Integer(..) -> Error(alias(type_, glance.NamedType("Int", None, [])))
-    oas.Number(..) -> Error(alias(type_, glance.NamedType("Float", None, [])))
-    oas.String(..) -> Error(alias(type_, glance.NamedType("String", None, [])))
-    oas.Null(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
-    oas.Array(items:, ..) -> Error(alias(type_, array_type(items, None)))
-
-    oas.Object(properties:, required:, ..) ->
-      Ok(gen_object(dict.to_list(properties), required, type_, None))
-    oas.AllOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
-    oas.AnyOf(_items) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
-    oas.OneOf(..) -> Error(alias(type_, glance.NamedType("Nil", None, [])))
-    oas.AlwaysPasses(..) ->
-      Error(alias(type_, glance.NamedType("Dynamic", Some("dynamic"), [])))
-    oas.AlwaysFails -> Error(alias(type_, glance.NamedType("Nil", None, [])))
-  }
-}
-
-fn array_type(items, module) {
+fn array_type(items, module_to_find_schema_types_in) {
   let inner = case items {
     oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
-      glance.NamedType(name_for_gleam_type(inner), module, [])
+      glance.NamedType(
+        name_for_gleam_type(inner),
+        module_to_find_schema_types_in,
+        [],
+      )
     oas.Ref(..) -> panic as "unexpected ref"
     oas.Inline(inner) ->
       case inner {
@@ -150,8 +139,10 @@ fn array_type(items, module) {
         oas.Number(..) -> glance.NamedType("Float", None, [])
         oas.String(..) -> glance.NamedType("String", None, [])
         oas.Null(..) -> glance.NamedType("Nil", None, [])
-        oas.Array(items:, ..) -> array_type(items, module)
-        oas.Object(..) -> glance.NamedType("Nil", None, [])
+        oas.Array(items:, ..) ->
+          array_type(items, module_to_find_schema_types_in)
+        oas.Object(..) -> todo as "object in array"
+        // glance.NamedType("Nil", None, [])
         oas.AnyOf(..) -> glance.NamedType("Nil", None, [])
         oas.AllOf(..) -> glance.NamedType("Nil", None, [])
         oas.OneOf(..) -> glance.NamedType("Nil", None, [])
@@ -362,7 +353,7 @@ fn schema_to_decode_fn(entry) {
   )
 }
 
-fn schema_to_decoder(name, schema, module) {
+fn schema_to_decoder(name, schema, module_to_find_schema_types_in) {
   let type_ = name_for_gleam_type(name)
   case schema {
     oas.Boolean(..) -> [glance.Expression(access("decode", "bool"))]
@@ -370,7 +361,9 @@ fn schema_to_decoder(name, schema, module) {
     oas.Number(..) -> [glance.Expression(access("decode", "float"))]
     oas.String(..) -> [glance.Expression(access("decode", "string"))]
     oas.Null(..) -> [glance.Expression(always_decode())]
-    oas.Array(items:, ..) -> [glance.Expression(array_decoder(items, module))]
+    oas.Array(items:, ..) -> [
+      glance.Expression(array_decoder(items, module_to_find_schema_types_in)),
+    ]
     oas.Object(properties:, required:, ..) -> {
       let properties = dict.to_list(properties)
       let #(fields, cons) =
@@ -379,7 +372,7 @@ fn schema_to_decoder(name, schema, module) {
 
           let field_decoder = case schema {
             oas.Ref(ref: "#/components/schemas/" <> s, ..) ->
-              case module {
+              case module_to_find_schema_types_in {
                 Some(m) -> call0(m, decoder(s))
                 None -> glance.Call(glance.Variable(decoder(s)), [])
               }
@@ -389,7 +382,8 @@ fn schema_to_decoder(name, schema, module) {
             oas.Inline(oas.Number(..)) -> access("decode", "float")
             oas.Inline(oas.String(..)) -> access("decode", "string")
             oas.Inline(oas.Null(..)) -> always_decode()
-            oas.Inline(oas.Array(items:, ..)) -> array_decoder(items, module)
+            oas.Inline(oas.Array(items:, ..)) ->
+              array_decoder(items, module_to_find_schema_types_in)
             oas.Inline(oas.Object(..)) -> always_decode()
             oas.Inline(oas.AllOf(..)) -> always_decode()
             oas.Inline(oas.AnyOf(..)) -> always_decode()
@@ -449,10 +443,10 @@ fn schema_to_decoder(name, schema, module) {
   }
 }
 
-fn array_decoder(items, module) {
+fn array_decoder(items, module_to_find_schema_types_in) {
   let exp = case items {
     oas.Ref(ref: "#/components/schemas/" <> inner, ..) ->
-      case module {
+      case module_to_find_schema_types_in {
         Some(m) -> call0(m, decoder(inner))
         None -> glance.Call(glance.Variable(decoder(inner)), [])
       }
@@ -464,7 +458,8 @@ fn array_decoder(items, module) {
         oas.Number(..) -> access("decode", "float")
         oas.String(..) -> access("decode", "string")
         oas.Null(..) -> always_decode()
-        oas.Array(items:, ..) -> array_decoder(items, module)
+        oas.Array(items:, ..) ->
+          array_decoder(items, module_to_find_schema_types_in)
         oas.Object(..) -> always_decode()
         oas.AllOf(..) -> always_decode()
         oas.AnyOf(..) -> always_decode()
@@ -478,19 +473,81 @@ fn array_decoder(items, module) {
 }
 
 fn gen_schema(schemas) {
+  // map fold through all the internal
   dict.fold(schemas, #([], [], []), fn(acc, name, schema) {
+    let #(top, _nullable, _acc) = lift.lift(oas.Inline(schema))
     let #(custom_types, type_aliases, fns) = acc
     let fns =
       list.append(fns, [
         schema_to_encoder(#(name, schema)),
         schema_to_decode_fn(#(name, schema)),
       ])
-    let #(custom_types, type_aliases) = case schema_to_type(name, schema) {
-      Error(alias) -> #(custom_types, [alias, ..type_aliases])
-      Ok(custom_type) -> #([custom_type, ..custom_types], type_aliases)
+    let name = name_for_gleam_type(name)
+    let #(custom_types, type_aliases) = case top {
+      lift.Named(..) -> {
+        echo top
+        todo
+      }
+      lift.Primitive(primitive) -> {
+        let type_ = to_type(lift.Primitive(primitive))
+        #(custom_types, [alias(name, type_), ..type_aliases])
+      }
+      lift.Array(items) -> {
+        let type_ = to_type(lift.Array(items))
+        #(custom_types, [alias(name, type_), ..type_aliases])
+      }
+      lift.Compound(lift.Fields(properties, required)) -> {
+        let fields =
+          list.map(properties, fn(property) {
+            let #(key, #(schema, nullable)) = property
+            let type_ = to_type(schema)
+
+            glance.LabelledVariantField(
+              case !list.contains(required, key) || nullable {
+                False -> type_
+                True -> glance.NamedType("Option", None, [type_])
+              },
+              name_for_gleam_field_or_var(key),
+            )
+          })
+        let type_ =
+          glance.CustomType(name, glance.Public, False, [], [
+            glance.Variant(name, fields),
+          ])
+        #([type_, ..custom_types], type_aliases)
+      }
     }
     #(custom_types, type_aliases, fns)
   })
+}
+
+fn to_type(lifted) {
+  let module_to_find_schema_types_in = None
+  case lifted {
+    lift.Named("#/components/schemas/" <> inner) -> {
+      glance.NamedType(
+        name_for_gleam_type(inner),
+        module_to_find_schema_types_in,
+        [],
+      )
+    }
+    lift.Primitive(primitive) -> {
+      case primitive {
+        lift.Boolean -> glance.NamedType("Bool", None, [])
+        lift.Integer -> glance.NamedType("Int", None, [])
+        lift.Number -> glance.NamedType("Float", None, [])
+        lift.String -> glance.NamedType("String", None, [])
+        lift.Null -> glance.NamedType("Null", None, [])
+        lift.Always -> glance.NamedType("Always", None, [])
+        lift.Never -> glance.NamedType("Never", None, [])
+      }
+    }
+    lift.Array(items) -> glance.NamedType("List", None, [to_type(items)])
+    _ -> {
+      echo lifted
+      todo
+    }
+  }
 }
 
 fn access(object_or_mod, field) {
