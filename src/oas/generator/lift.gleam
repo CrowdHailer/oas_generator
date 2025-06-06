@@ -54,7 +54,7 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
   }
 }
 
-fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
+pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
   case schema {
     oas.Ref(ref:, ..) -> #(Named(ref), False, acc)
     oas.Inline(schema) ->

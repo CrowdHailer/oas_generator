@@ -101,6 +101,36 @@ pub fn ref_object_schema_test() {
   ])
   |> birdie.snap(title: "ref_object_schema_test")
 }
+
+pub fn nested_object_test() {
+  schema([
+    #(
+      "big_box",
+      object(
+        [
+          #(
+            "little_box",
+            oas.Inline(object([#("fish", oas.Inline(just_string))], ["fish"])),
+          ),
+        ],
+        ["little_box"],
+      ),
+    ),
+    #(
+      "big_bird",
+      object(
+        [
+          #(
+            "little_bird",
+            oas.Inline(object([#("fish", oas.Inline(just_integer))], ["fish"])),
+          ),
+        ],
+        ["little_bird"],
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "nested_object_test")
+}
 // pub fn allof_named_test() {
 //   schema([
 //     #("A", object([#("a", oas.Inline(just_string))], ["a"])),

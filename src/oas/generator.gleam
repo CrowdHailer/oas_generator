@@ -102,7 +102,8 @@ fn to_encoder(lifted) {
     lift.Array(items) -> {
       call2("json", "array", glance.Variable("_"), to_encoder(items))
     }
-    lift.Compound(..) -> noop1("object in array")
+    lift.Compound(index) ->
+      glance.Variable(encode_fn("internal_" <> int.to_string(index)))
   }
 }
 
@@ -275,9 +276,23 @@ fn gen_top_decoder_needs_name(name, top, module) {
 
 fn gen_schema(schemas) {
   let module = Schema
-  // map fold through all the internal
-  dict.fold(schemas, #([], [], []), fn(acc, name, schema) {
-    let #(top, _nullable, _acc) = lift.lift(oas.Inline(schema))
+  let #(internal, named) =
+    list.map_fold(schemas |> dict.to_list, [], fn(acc, entry) {
+      let #(name, schema) = entry
+      let #(top, _nullable, acc) = lift.do_lift(oas.Inline(schema), acc)
+      #(acc, #(name, top))
+    })
+  let named =
+    list.append(
+      named,
+      internal
+        |> list.reverse
+        |> list.index_map(fn(fields, index) {
+          #("internal_" <> int.to_string(index), lift.Compound(fields))
+        }),
+    )
+  list.fold(named, #([], [], []), fn(acc, entry) {
+    let #(name, top) = entry
     let #(custom_types, type_aliases, fns) = acc
     let fns =
       list.append(fns, [
@@ -336,6 +351,7 @@ fn to_type(lifted, module) {
       }
       glance.NamedType(name_for_gleam_type(inner), mod, [])
     }
+    lift.Named(..) -> todo as "bad name"
     lift.Primitive(primitive) -> {
       case primitive {
         lift.Boolean -> glance.NamedType("Bool", None, [])
@@ -349,9 +365,9 @@ fn to_type(lifted, module) {
     }
     lift.Array(items) ->
       glance.NamedType("List", None, [to_type(items, module)])
-    _ -> {
-      echo lifted
-      todo
+    lift.Compound(index) -> {
+      let type_ = "Internal" <> int.to_string(index)
+      glance.NamedType(type_, None, [])
     }
   }
 }
@@ -767,7 +783,10 @@ fn to_decoder(lifted, module) {
         lift.Never -> todo
       }
     lift.Array(items) -> call1("decode", "list", to_decoder(items, module))
-    lift.Compound(fields) -> todo as "compound"
+    lift.Compound(index) -> {
+      let func = "internal_" <> int.to_string(index) <> "_decoder"
+      glance.Call(glance.Variable(func), [])
+    }
   }
 }
 
