@@ -1,6 +1,7 @@
 import birdie
 import gleam/dict
 import gleam/option.{None}
+import non_empty_list.{NonEmptyList}
 import oas
 import oas/generator as gen
 
@@ -45,10 +46,25 @@ fn schema(schemas) {
   gen.gen_schema_file(dict.from_list(schemas), "myservice")
 }
 
+pub fn nil_alias_test() {
+  schema([#("other_nil", oas.Null(None, None, False))])
+  |> birdie.snap(title: "nil_alias_test")
+}
+
 // Simple things don't become new custom types
 pub fn simple_string_schema_test() {
   schema([#("my_string", just_string)])
   |> birdie.snap(title: "simple string schema test")
+}
+
+pub fn always_test() {
+  schema([#("yes", oas.AlwaysPasses)])
+  |> birdie.snap(title: "always_test")
+}
+
+pub fn never_test() {
+  schema([#("yes", oas.AlwaysFails)])
+  |> birdie.snap(title: "never_test")
 }
 
 // pub fn simple_nullable_schema_test() {
@@ -99,4 +115,60 @@ pub fn ref_object_schema_test() {
     #("user", object([#("name", ref("fullname"))], ["name"])),
   ])
   |> birdie.snap(title: "ref_object_schema_test")
+}
+
+pub fn nested_object_test() {
+  schema([
+    #(
+      "big_box",
+      object(
+        [
+          #(
+            "little_box",
+            oas.Inline(object([#("fish", oas.Inline(just_string))], ["fish"])),
+          ),
+        ],
+        ["little_box"],
+      ),
+    ),
+    #(
+      "big_bird",
+      object(
+        [
+          #(
+            "little_bird",
+            oas.Inline(object([#("fish", oas.Inline(just_integer))], ["fish"])),
+          ),
+        ],
+        ["little_bird"],
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "nested_object_test")
+}
+
+pub fn allof_named_test() {
+  schema([
+    #("A", object([#("a", oas.Inline(just_string))], ["a"])),
+    #("B", object([#("b", oas.Inline(just_string))], ["b"])),
+    #("Both", oas.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
+  ])
+  |> birdie.snap(title: "allof_named_test")
+}
+
+pub fn single_allof_test() {
+  schema([#("Box", oas.AllOf(NonEmptyList(oas.Inline(just_string), [])))])
+  |> birdie.snap(title: "single_allof_test")
+}
+
+pub fn unsupported_anyof_test() {
+  schema([
+    #(
+      "Box",
+      oas.AnyOf(
+        NonEmptyList(oas.Inline(just_string), [oas.Inline(just_integer)]),
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "unsupported_anyof_test")
 }

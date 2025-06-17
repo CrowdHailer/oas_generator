@@ -1,0 +1,22 @@
+---
+version: 1.3.0
+title: always_test
+file: ./test/oas/generator_test.gleam
+test_name: always_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type Yes =
+  dynamic.Dynamic
+
+pub fn yes_decoder() {
+  decode.new_primitive_decoder("Dynamic", fn(raw) { Ok(raw) })
+}
+
+pub fn yes_encode(data: Yes) {
+  data
+}

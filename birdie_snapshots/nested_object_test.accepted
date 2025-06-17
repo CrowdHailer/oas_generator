@@ -1,0 +1,63 @@
+---
+version: 1.3.0
+title: nested_object_test
+file: ./test/oas/generator_test.gleam
+test_name: nested_object_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type BigBird {
+  BigBird(little_bird: Internal0)
+}
+
+pub type BigBox {
+  BigBox(little_box: Internal1)
+}
+
+pub type Internal0 {
+  Internal0(fish: Int)
+}
+
+pub type Internal1 {
+  Internal1(fish: String)
+}
+
+pub fn internal_1_decoder() {
+  use fish <- decode.field("fish", decode.string)
+  decode.success(Internal1(fish: fish))
+}
+
+pub fn internal_1_encode(data: Internal1) {
+  json.object([#("fish", json.string(data.fish))])
+}
+
+pub fn internal_0_decoder() {
+  use fish <- decode.field("fish", decode.int)
+  decode.success(Internal0(fish: fish))
+}
+
+pub fn internal_0_encode(data: Internal0) {
+  json.object([#("fish", json.int(data.fish))])
+}
+
+pub fn big_box_decoder() {
+  use little_box <- decode.field("little_box", internal_1_decoder())
+  decode.success(BigBox(little_box: little_box))
+}
+
+pub fn big_box_encode(data: BigBox) {
+  json.object([#("little_box", internal_1_encode(data.little_box))])
+}
+
+pub fn big_bird_decoder() {
+  use little_bird <- decode.field("little_bird", internal_0_decoder())
+  decode.success(BigBird(little_bird: little_bird))
+}
+
+pub fn big_bird_encode(data: BigBird) {
+  json.object([#("little_bird", internal_0_encode(data.little_bird))])
+}

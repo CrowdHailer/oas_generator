@@ -1,0 +1,22 @@
+---
+version: 1.3.0
+title: unsupported_anyof_test
+file: ./test/oas/generator_test.gleam
+test_name: unsupported_anyof_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type Box =
+  dynamic.Dynamic
+
+pub fn box_decoder() {
+  decode.new_primitive_decoder("Dynamic", fn(raw) { Ok(raw) })
+}
+
+pub fn box_encode(data: Box) {
+  data
+}

@@ -1,0 +1,22 @@
+---
+version: 1.3.0
+title: nil_alias_test
+file: ./test/oas/generator_test.gleam
+test_name: nil_alias_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type OtherNil =
+  Null
+
+pub fn other_nil_decoder() {
+  decode.new_primitive_decoder("Nil", fn(_) { Ok(Nil) })
+}
+
+pub fn other_nil_encode(_data: OtherNil) {
+  json.null()
+}

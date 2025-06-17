@@ -1,0 +1,22 @@
+---
+version: 1.3.0
+title: never_test
+file: ./test/oas/generator_test.gleam
+test_name: never_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type Yes =
+  Never
+
+pub fn yes_decoder() {
+  decode.new_primitive_decoder("Never", fn(_) { Error(Nil) })
+}
+
+pub fn yes_encode(_data: Yes) {
+  panic as "never value cannot be encoded"
+}

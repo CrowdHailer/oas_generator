@@ -1,0 +1,50 @@
+---
+version: 1.3.0
+title: allof_named_test
+file: ./test/oas/generator_test.gleam
+test_name: allof_named_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+
+pub type A {
+  A(a: String)
+}
+
+pub type B {
+  B(b: String)
+}
+
+pub type Both =
+  #(A, B)
+
+pub fn both_decoder() {
+  use e0 <- decode.then(a_decoder())
+  use e1 <- decode.then(b_decoder())
+  decode.success(#(e0, e1))
+}
+
+pub fn both_encode(data: Both) {
+  utils.merge([a_encode(data.0), b_encode(data.1)])
+}
+
+pub fn b_decoder() {
+  use b <- decode.field("b", decode.string)
+  decode.success(B(b: b))
+}
+
+pub fn b_encode(data: B) {
+  json.object([#("b", json.string(data.b))])
+}
+
+pub fn a_decoder() {
+  use a <- decode.field("a", decode.string)
+  decode.success(A(a: a))
+}
+
+pub fn a_encode(data: A) {
+  json.object([#("a", json.string(data.a))])
+}
