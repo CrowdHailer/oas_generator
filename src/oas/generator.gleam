@@ -14,6 +14,7 @@ import gleam/string
 import justin
 import oas
 import oas/generator/lift
+import oas/generator/shake
 import simplifile
 import snag
 
@@ -1205,6 +1206,8 @@ pub fn build(spec_src, project_path, provider, exclude) {
     |> snag.map_error(simplifile.describe_error)
     |> snag.context("Could not write file " <> module_path <> ".gleam"),
   )
+  shake.references_from_paths(spec.paths)
+  shake.references_from_request_bodies(spec.components.request_bodies)
 
   let content =
     gen_schema_file(spec.components.schemas, provider)
