@@ -126,6 +126,8 @@ fn to_encoder(lifted) {
       ])
     lift.Compound(index) ->
       glance.Variable(encode_fn("internal_" <> int.to_string(index)))
+    lift.Dictionary(values) ->
+      call2("utils", "dict", glance.Variable("_"), to_encoder(values))
     lift.Unsupported ->
       glance.Fn([glance.FnParameter(glance.Named("data"), None)], None, [
         glance.Expression(glance.Variable("data")),
@@ -152,7 +154,7 @@ fn schema_to_encoder(entry) {
       call2("json", "array", arg, to_encoder(items))
     }
     lift.Tuple(items) -> encode_tuple_body(items, arg)
-    lift.Compound(lift.Fields(properties, required)) -> {
+    lift.Compound(lift.Fields(properties, additional, required)) -> {
       call1(
         "json",
         "object",
@@ -168,16 +170,43 @@ fn schema_to_encoder(entry) {
             }
             glance.Tuple([glance.String(key), value])
           }),
-          None,
+          case additional {
+            Some(values) ->
+              Some(call1(
+                "dict",
+                "to_list",
+                call2(
+                  "dict",
+                  "map_values",
+                  access("data", "additional_properties"),
+                  glance.Fn(
+                    [
+                      glance.FnParameter(glance.Discarded("key"), None),
+                      glance.FnParameter(glance.Named("value"), None),
+                    ],
+                    None,
+                    [
+                      glance.Expression(
+                        glance.Call(to_encoder(values), [
+                          glance.UnlabelledField(glance.Variable("value")),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ),
+              ))
+            None -> None
+          },
         ),
       )
     }
+    lift.Dictionary(values) -> call2("utils", "dict", arg, to_encoder(values))
     lift.Unsupported -> arg
   }
 
   let ignored = case top {
     lift.Primitive(lift.Null) | lift.Primitive(lift.Never) -> True
-    lift.Compound(lift.Fields(properties, _)) -> list.is_empty(properties)
+    lift.Compound(lift.Fields(properties, None, _)) -> list.is_empty(properties)
     _ -> False
   }
   let assignment = case ignored {
@@ -294,9 +323,9 @@ fn gen_top_decoder_needs_name(name, top, module) {
         glance.Block(statements) -> statements
         other -> [glance.Expression(other)]
       }
-    lift.Compound(lift.Fields(properties, required)) -> {
+    lift.Compound(lift.Fields(properties, additional, required)) -> {
       let type_ = name_for_gleam_type(name)
-      let #(fields, cons) =
+      let zipped =
         list.map(properties, fn(property) {
           let #(key, #(schema, nullable)) = property
           let is_optional = !list.contains(required, key) || nullable
@@ -325,8 +354,36 @@ fn gen_top_decoder_needs_name(name, top, module) {
             ),
           )
         })
-        |> list.unzip
-
+      let zipped = case additional {
+        Some(schema) -> {
+          let key = "additionalProperties"
+          list.append(zipped, [
+            #(
+              glance.Use(
+                [glance.PatternVariable(name_for_gleam_field_or_var(key))],
+                call2(
+                  "utils",
+                  "decode_additional",
+                  glance.List(
+                    list.map(properties, fn(p) {
+                      let #(k, _) = p
+                      glance.String(k)
+                    }),
+                    None,
+                  ),
+                  to_decoder(schema, module),
+                ),
+              ),
+              glance.LabelledField(
+                name_for_gleam_field_or_var(key),
+                glance.Variable(name_for_gleam_field_or_var(key)),
+              ),
+            ),
+          ])
+        }
+        None -> zipped
+      }
+      let #(fields, cons) = list.unzip(zipped)
       let final =
         glance.Expression(
           call1("decode", "success", case list.length(cons) {
@@ -336,6 +393,9 @@ fn gen_top_decoder_needs_name(name, top, module) {
         )
       list.append(fields, [final])
     }
+    lift.Dictionary(values) -> [
+      glance.Expression(to_decoder(lift.Dictionary(values), module)),
+    ]
     lift.Unsupported -> [
       glance.Expression(to_decoder(lift.Unsupported, module)),
     ]
@@ -385,9 +445,13 @@ fn gen_schema(schemas) {
         let type_ = to_type(lift.Tuple(items), module)
         #(custom_types, [alias(name, type_), ..type_aliases])
       }
-      lift.Compound(lift.Fields(properties, required)) -> {
-        let type_ = custom_type(name, properties, required, module)
+      lift.Compound(lift.Fields(properties, additional, required)) -> {
+        let type_ = custom_type(name, properties, additional, required, module)
         #([type_, ..custom_types], type_aliases)
+      }
+      lift.Dictionary(values) -> {
+        let type_ = to_type(lift.Dictionary(values), module)
+        #(custom_types, [alias(name, type_), ..type_aliases])
       }
       lift.Unsupported -> {
         let type_ = to_type(lift.Unsupported, module)
@@ -398,7 +462,7 @@ fn gen_schema(schemas) {
   })
 }
 
-fn custom_type(name, properties, required, module) {
+fn custom_type(name, properties, additional, required, module) {
   let fields =
     list.map(properties, fn(property) {
       let #(key, #(schema, nullable)) = property
@@ -412,6 +476,23 @@ fn custom_type(name, properties, required, module) {
         name_for_gleam_field_or_var(key),
       )
     })
+  let fields = case additional {
+    Some(schema) -> {
+      let key = "additionalProperties"
+      let type_ = to_type(schema, module)
+      let extra =
+        glance.LabelledVariantField(
+          glance.NamedType("Dict", Some("dict"), [
+            glance.NamedType("String", None, []),
+            type_,
+          ]),
+          name_for_gleam_field_or_var(key),
+        )
+      list.append(fields, [extra])
+    }
+
+    None -> fields
+  }
   let name = name_for_gleam_type(name)
   glance.CustomType(name, glance.Public, False, [], [
     glance.Variant(name, fields),
@@ -447,6 +528,11 @@ fn to_type(lifted, module) {
       let type_ = "Internal" <> int.to_string(index)
       glance.NamedType(type_, None, [])
     }
+    lift.Dictionary(values) ->
+      glance.NamedType("Dict", Some("dict"), [
+        glance.NamedType("String", None, []),
+        to_type(values, module),
+      ])
     lift.Unsupported -> glance.NamedType("Dynamic", Some("dynamic"), [])
   }
 }
@@ -811,9 +897,14 @@ fn gen_content_handling(operation_id, content, wrapper) {
           None,
         )
         #(lift.Array(a), _, []) -> #(to_decoder(lift.Array(a), module), None)
-        #(lift.Compound(lift.Fields(parameters, required)) as top, _, []) -> {
+        #(
+          lift.Compound(lift.Fields(parameters, additional, required)) as top,
+          _,
+          [],
+        ) -> {
           let name = operation_id <> "_response"
-          let type_ = custom_type(name, parameters, required, Operations)
+          let type_ =
+            custom_type(name, parameters, additional, required, Operations)
           let decoder =
             glance.Block(gen_top_decoder_needs_name(name, top, module))
           #(decoder, Some(type_))
@@ -888,6 +979,13 @@ fn to_decoder(lifted, module) {
       let func = "internal_" <> int.to_string(index) <> "_decoder"
       glance.Call(glance.Variable(func), [])
     }
+    lift.Dictionary(values) ->
+      call2(
+        "decode",
+        "dict",
+        access("decode", "string"),
+        to_decoder(values, module),
+      )
     lift.Unsupported -> dynamic_decode()
   }
 }

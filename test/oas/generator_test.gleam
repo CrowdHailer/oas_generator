@@ -1,6 +1,6 @@
 import birdie
 import gleam/dict
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import non_empty_list.{NonEmptyList}
 import oas
 import oas/generator as gen
@@ -35,7 +35,21 @@ fn array(items) {
 }
 
 fn object(params, required) {
-  oas.Object(dict.from_list(params), required, False, None, None, False)
+  oas.Object(
+    dict.from_list(params),
+    required,
+    None,
+    None,
+    0,
+    False,
+    None,
+    None,
+    False,
+  )
+}
+
+fn dict(of) {
+  oas.Object(dict.new(), [], Some(of), None, 0, False, None, None, False)
 }
 
 fn ref(thing) {
@@ -145,6 +159,36 @@ pub fn nested_object_test() {
     ),
   ])
   |> birdie.snap(title: "nested_object_test")
+}
+
+pub fn pure_dictionary_test() {
+  schema([#("Bag", dict(oas.Inline(just_integer)))])
+  |> birdie.snap(title: "pure_dictionary_test")
+}
+
+pub fn nested_dictionary_test() {
+  schema([#("Bag", dict(oas.Inline(dict(oas.Inline(just_integer)))))])
+  |> birdie.snap(title: "nested_dictionary_test")
+}
+
+pub fn object_and_additional_test() {
+  schema([
+    #(
+      "Preference",
+      oas.Object(
+        dict.from_list([#("colour", oas.Inline(just_string))]),
+        ["colour"],
+        Some(oas.Inline(just_integer)),
+        None,
+        0,
+        False,
+        None,
+        None,
+        False,
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "object_and_additional_test")
 }
 
 pub fn allof_named_test() {

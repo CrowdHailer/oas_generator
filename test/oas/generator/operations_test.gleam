@@ -12,7 +12,17 @@ fn array(items) {
 }
 
 fn object(params, required) {
-  oas.Object(dict.from_list(params), required, False, None, None, False)
+  oas.Object(
+    dict.from_list(params),
+    required,
+    None,
+    None,
+    0,
+    False,
+    None,
+    None,
+    False,
+  )
 }
 
 const no_info = oas.Info("title", None, None, None, None, None, "3.1.0")

@@ -1,5 +1,6 @@
 import gleam/dict
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import non_empty_list.{NonEmptyList}
 import oas
 
@@ -9,6 +10,7 @@ pub type Schema(t) {
   Array(Lifted)
   Tuple(List(Lifted))
   Compound(t)
+  Dictionary(Lifted)
   Unsupported
 }
 
@@ -19,7 +21,11 @@ pub type Top =
   Schema(Fields)
 
 pub type Fields {
-  Fields(named: List(#(String, #(Lifted, Bool))), required: List(String))
+  Fields(
+    named: List(#(String, #(Lifted, Bool))),
+    additional: Option(Lifted),
+    required: List(String),
+  )
 }
 
 pub type Primitive {
@@ -47,6 +53,7 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
     Primitive(primitive) -> #(Primitive(primitive), acc)
     Array(items) -> #(Array(items), acc)
     Tuple(items) -> #(Tuple(items), acc)
+    Dictionary(values) -> #(Dictionary(values), acc)
     Unsupported -> #(Unsupported, acc)
   }
 }
@@ -66,16 +73,47 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
           let #(schema, acc) = not_top(top, acc)
           #(Array(schema), nullable, acc)
         }
-        oas.Object(nullable:, properties:, required:, ..) -> {
-          let #(acc, properties) =
-            list.map_fold(properties |> dict.to_list, acc, fn(acc, property) {
-              let #(field, schema) = property
-              let #(top, nullable, acc) = do_lift(schema, acc)
+        oas.Object(
+          nullable:,
+          properties:,
+          required:,
+          additional_properties:,
+          ..,
+        ) -> {
+          case dict.is_empty(properties), additional_properties {
+            True, Some(values) -> {
+              let #(top, _, acc) = do_lift(values, acc)
               let #(schema, acc) = not_top(top, acc)
+              #(Dictionary(schema), nullable, acc)
+            }
+            _, _ -> {
+              let #(acc, properties) =
+                list.map_fold(
+                  properties |> dict.to_list,
+                  acc,
+                  fn(acc, property) {
+                    let #(field, schema) = property
+                    let #(top, nullable, acc) = do_lift(schema, acc)
+                    let #(schema, acc) = not_top(top, acc)
 
-              #(acc, #(field, #(schema, nullable)))
-            })
-          #(Compound(Fields(properties, required)), nullable, acc)
+                    #(acc, #(field, #(schema, nullable)))
+                  },
+                )
+              let #(additional, acc) = case additional_properties {
+                Some(values) -> {
+                  let #(top, _, acc) = do_lift(values, acc)
+                  let #(schema, acc) = not_top(top, acc)
+                  #(Some(schema), acc)
+                }
+                None -> #(None, acc)
+              }
+              #(
+                Compound(Fields(properties, additional, required)),
+                nullable,
+                acc,
+              )
+            }
+          }
         }
         oas.AllOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
         oas.AllOf(items) -> {
