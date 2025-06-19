@@ -870,9 +870,9 @@ fn prefix_signs(in) {
 pub fn name_for_gleam_type(in) {
   in
   |> prefix_signs
+  |> replace_disallowed_charachters
   |> justin.pascal_case()
   |> prefix_numbers
-  |> replace_disallowed_charachters
 }
 
 pub fn name_for_gleam_field_or_var(in) {
@@ -885,23 +885,18 @@ pub fn name_for_gleam_field_or_var(in) {
   |> replace_gleam_keywords()
 }
 
-fn gen_content_handling(operation_id, content, wrapper) {
+fn gen_content_handling(operation_id, content, wrapper, internal) {
   let module = Operations
   let #(known, unknown) = get_structure_json_media(content)
   case known, unknown {
     [#(_, oas.MediaType(schema))], _ -> {
-      let #(decoder, resp_type) = case lift.lift(schema) {
-        #(lift.Named(n), _, []) -> #(to_decoder(lift.Named(n), module), None)
-        #(lift.Primitive(p), _, []) -> #(
-          to_decoder(lift.Primitive(p), module),
-          None,
-        )
-        #(lift.Array(a), _, []) -> #(to_decoder(lift.Array(a), module), None)
-        #(
-          lift.Compound(lift.Fields(parameters, additional, required)) as top,
-          _,
-          [],
-        ) -> {
+      let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
+      let #(decoder, resp_type) = case lifted {
+        lift.Named(n) -> #(to_decoder(lift.Named(n), module), None)
+        lift.Primitive(p) -> #(to_decoder(lift.Primitive(p), module), None)
+        lift.Array(a) -> #(to_decoder(lift.Array(a), module), None)
+        lift.Tuple(of) -> #(to_decoder(lift.Tuple(of), module), None)
+        lift.Compound(lift.Fields(parameters, additional, required)) as top -> {
           let name = operation_id <> "_response"
           let type_ =
             custom_type(name, parameters, additional, required, Operations)
@@ -909,27 +904,29 @@ fn gen_content_handling(operation_id, content, wrapper) {
             glance.Block(gen_top_decoder_needs_name(name, top, module))
           #(decoder, Some(type_))
         }
-        #(_, _, _) -> {
-          panic as "dont support internal types at the top level"
-        }
+        lift.Dictionary(values) -> #(
+          to_decoder(lift.Dictionary(values), module),
+          None,
+        )
+        lift.Unsupported -> #(to_decoder(lift.Unsupported, module), None)
       }
       let action =
         call2("json", "parse_bits", glance.Variable("body"), decoder)
         |> pipe(call1("result", "map", glance.Variable(wrapper)))
       // True because the body is used
 
-      #(action, resp_type, True)
+      #(#(action, resp_type, True), internal)
       // gen_json_content_handling(operation_id, schema, wrapper)
     }
     // No content
-    [], [] -> just_return_ok_nil(wrapper)
+    [], [] -> #(just_return_ok_nil(wrapper), internal)
     [], [#(unknown, _)] -> {
       io.println("unknown content type: " <> unknown)
-      just_return_ok_nil(wrapper)
+      #(just_return_ok_nil(wrapper), internal)
     }
     _, _ -> {
       io.println("multiple content types not supported")
-      just_return_ok_nil(wrapper)
+      #(just_return_ok_nil(wrapper), internal)
     }
   }
 }
@@ -1009,7 +1006,7 @@ fn status_range(responses, above_equal, bellow) {
   })
 }
 
-fn gen_response(operation, components: oas.Components) {
+fn gen_response(operation, components: oas.Components, internal) {
   let #(_method, op) = operation
   let op: oas.Operation = op
   let responses = op.responses |> dict.to_list
@@ -1021,11 +1018,11 @@ fn gen_response(operation, components: oas.Components) {
         _ -> Error(Nil)
       }
     })
-  let #(default_branch, resp_type, used) = case default {
+  let #(#(default_branch, resp_type, used), internal) = case default {
     Ok(response) -> {
       let oas.Response(content: content, ..) =
         oas.fetch_response(response, components.responses)
-      gen_content_handling(op.operation_id, content, "Error")
+      gen_content_handling(op.operation_id, content, "Error", internal)
     }
     Error(Nil) -> {
       case status_range(responses, 400, 600) {
@@ -1047,7 +1044,7 @@ fn gen_response(operation, components: oas.Components) {
             Ok(_statuses) -> {
               let oas.Response(content: content, ..) =
                 oas.fetch_response(first, components.responses)
-              gen_content_handling(op.operation_id, content, "Error")
+              gen_content_handling(op.operation_id, content, "Error", internal)
             }
             Error(_) -> {
               let branch =
@@ -1055,7 +1052,7 @@ fn gen_response(operation, components: oas.Components) {
                 |> pipe(glance.Variable("Error"))
                 |> pipe(glance.Variable("Ok"))
 
-              #(branch, None, False)
+              #(#(branch, None, False), internal)
             }
           }
         }
@@ -1065,18 +1062,18 @@ fn gen_response(operation, components: oas.Components) {
             |> pipe(glance.Variable("Error"))
             |> pipe(glance.Variable("Ok"))
 
-          #(branch, None, False)
+          #(#(branch, None, False), internal)
         }
       }
     }
   }
   let default_clause =
     glance.Clause([[glance.PatternDiscard("")]], None, default_branch)
-  let #(used, response_type, expected_clauses) = case
+  let #(#(used, response_type, expected_clauses), internal) = case
     status_range(responses, 200, 300)
     |> list.sort(fn(ra, rb) { int.compare(ra.0, rb.0) })
   {
-    [] -> #(used, resp_type, [])
+    [] -> #(#(used, resp_type, []), internal)
     [#(status, first), ..more] -> {
       case more {
         [] -> Nil
@@ -1087,15 +1084,15 @@ fn gen_response(operation, components: oas.Components) {
       }
       let oas.Response(content: content, ..) =
         oas.fetch_response(first, components.responses)
-      let #(branch, resp_type, u) =
-        gen_content_handling(op.operation_id, content, "Ok")
+      let #(#(branch, resp_type, u), internal) =
+        gen_content_handling(op.operation_id, content, "Ok", internal)
       let clause =
         glance.Clause(
           [[glance.PatternInt(int.to_string(status))]],
           None,
           branch,
         )
-      #(used || u, resp_type, [clause])
+      #(#(used || u, resp_type, [clause]), internal)
     }
   }
 
@@ -1133,28 +1130,29 @@ fn gen_response(operation, components: oas.Components) {
       ],
       location: glance.Span(0, 0),
     )
-  #(response_handler, response_type)
+  #(#(response_handler, response_type), internal)
 }
 
 // This returns functions for the top level and operations file
-fn gen_fns(key, path_item: oas.PathItem, components, exclude) {
+fn gen_fns(key, path_item: oas.PathItem, components, exclude, internal) {
   let operations =
     list.filter(path_item.operations, fn(op) {
       !list.contains(exclude, { op.1 }.operation_id)
     })
 
-  list.map(operations, fn(op) {
+  list.map_fold(operations, internal, fn(internal, op) {
     let #(fn_, req_fn) =
       gen_request_for_op(op, key, path_item.parameters, components)
-    let #(response_handler, response_type) = gen_response(op, components)
-    #(#([response_handler, req_fn], response_type), fn_)
+    let #(#(response_handler, response_type), internal) =
+      gen_response(op, components, internal)
+    #(internal, #(#([response_handler, req_fn], response_type), fn_))
   })
 }
 
-fn gen_ops(op, components, exclude) {
+fn gen_operations(op, components, exclude, internal) {
   let #(key, path) = op
 
-  gen_fns(key, path, components, exclude)
+  gen_fns(key, path, components, exclude, internal)
 }
 
 fn defs(xs) {
@@ -1224,8 +1222,24 @@ pub fn build(spec_src, project_path, provider, exclude) {
 
 pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let paths = dict.to_list(spec.paths)
-  let fs = list.flat_map(paths, gen_ops(_, spec.components, exclude))
-  let #(operation_functions, top) = list.unzip(fs)
+  let internal = []
+  let #(internal, fs) =
+    list.map_fold(paths, internal, fn(internal, path) {
+      gen_operations(path, spec.components, exclude, internal)
+    })
+  let #(internal_types, internal_decoders) =
+    list.index_map(internal, fn(fields, index) {
+      let lift.Fields(properties, additional, required) = fields
+      let name = "Internal" <> int.to_string(index)
+      let type_ =
+        custom_type(name, properties, additional, required, Operations)
+
+      let encoder = schema_to_decode_fn(#(name, lift.Compound(fields)))
+      #(type_, encoder)
+    })
+    |> list.unzip
+
+  let #(operation_functions, top) = list.unzip(list.flatten(fs))
   let #(operation_functions, operation_types) = list.unzip(operation_functions)
   let operation_types =
     list.filter_map(operation_types, option.to_result(_, Nil))
@@ -1255,10 +1269,13 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
         ),
         ..list.map(modules, glance.Import(_, None, [], []))
       ]),
-      defs(operation_types),
+      defs(list.append(internal_types, operation_types)),
       [],
       [],
-      list.map(operation_functions, glance.Definition([], _)),
+      list.map(
+        list.append(internal_decoders, operation_functions),
+        glance.Definition([], _),
+      ),
     )
     |> glance_printer.print
 

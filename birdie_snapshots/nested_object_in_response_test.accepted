@@ -1,0 +1,50 @@
+---
+version: 1.3.0
+title: nested_object_in_response_test
+file: ./test/oas/generator/operations_test.gleam
+test_name: nested_object_in_response_test
+---
+import gleam/bool
+import gleam/result
+import gleam/dynamic/decode
+import gleam/json
+import gleam/float
+import gleam/int
+import gleam/http/response
+import gleam/http
+import myservice/schema
+import myservice/utils
+import gleam/option.{type Option, None}
+
+pub type UsersGetUsersResponse {
+  UsersGetUsersResponse(metadata: Internal0)
+}
+
+pub type Internal0 {
+  Internal0(param: String)
+}
+
+pub fn users_get_users_request(base) {
+  let method = http.Get
+  let path = "/users"
+  let query = []
+  base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
+    query,
+  )
+}
+
+pub fn users_get_users_response(response) {
+  let response.Response(status:, body:, ..) = response
+  case status {
+    200 -> json.parse_bits(body, {
+        use metadata <- decode.field("metadata", internal_0_decoder())
+        decode.success(UsersGetUsersResponse(metadata: metadata))
+      }) |> result.map(Ok)
+    _ -> response |> Error |> Ok
+  }
+}
+
+pub fn internal0_decoder() {
+  use param <- decode.field("param", decode.string)
+  decode.success(Internal0(param: param))
+}

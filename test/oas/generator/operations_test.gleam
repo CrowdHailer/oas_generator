@@ -104,6 +104,40 @@ pub fn single_inline_object_response_test() {
   birdie.snap(ops, "single_inline_object_response_test")
 }
 
+pub fn nested_object_in_response_test() {
+  let paths =
+    dict.from_list([
+      path("/users", [
+        get("users/get_users", [], None, [
+          #(
+            oas.Status(200),
+            json(
+              oas.Inline(
+                object(
+                  [
+                    #(
+                      "metadata",
+                      oas.Inline(
+                        object([#("param", oas.Inline(just_string))], ["param"]),
+                      ),
+                    ),
+                  ],
+                  ["metadata"],
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "nested_object_in_response_test")
+}
+
 pub fn array_parameters_response_test() {
   let paths =
     dict.from_list([
