@@ -53,6 +53,23 @@ Run the generator.
 gleam run -m petstore/dev
 ```
 
+Add functions to build your base request.
+
+*OAS Generator does not support authentication yet, you will need to add this yourself.*
+
+To handle this the generated code leaves the following as hooks to implement in the `<project>.gleam` file.
+The required functions are `handle_errors` and `base_request`. To see an example of these check out the netlify implementation [here](https://github.com/midas-framework/midas_sdk/blob/main/sdks/netlify/src/netlify.gleam)
+
+Code above the `// GENERATED -------------` line will be left alone.
+
+*OAS Generator uses Midas to compose request and response functions.*
+
+If you do not want to use Midas you can delete the top project file and use the functions in `operations.gleam` directly.
+Running with midas requires you to use a runner. Runners are available for node and the browser. 
+It is also faily easy to write your own runner, if you wish to only handle the fetch effect
+
+For further help reach out in the [Gleam Discord](https://discord.com/channels/768594524158427167)
+
 ## 📚 Documentation
 Further documentation can be found at <https://hexdocs.pm/oas_generator>.
 
