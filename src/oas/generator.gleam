@@ -181,32 +181,51 @@ fn gen_request_for_op(
     }
   }
 
+  let module = misc.Operations
   let body = case op.request_body {
     Some(body) -> {
       let oas.RequestBody(content: content, ..) =
         oas.fetch_request_body(body, components.request_bodies)
       let #(known, unknown) = get_structure_json_media(content)
       case known, unknown {
-        [#(_, oas.MediaType(schema))], _ ->
-          case schema {
-            oas.Ref(ref: "#/components/schemas/" <> name, ..) -> {
-              let arg = ast.name_for_gleam_field_or_var(name)
-              let encode =
-                ast.call1(
-                  "utils",
-                  "json_to_bits",
-                  ast.call1(
-                    "schema",
-                    schema.encode_fn(name),
-                    glance.Variable(arg),
-                  ),
-                )
-              Some(#(arg, encode))
+        [#(_, oas.MediaType(schema))], _ -> {
+          // TODO replace internal
+          let internal = []
+          let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
+          let #(arg, json) = case lifted {
+            lift.Named(n) -> {
+              let encoder = schema.to_encoder(lift.Named(n), module)
+              #("data", ast.call(encoder, glance.Variable("data")))
             }
-            _ -> {
-              Some(#("data", glance.Variable("data")))
+            lift.Primitive(p) -> {
+              let encoder = schema.to_encoder(lift.Primitive(p), module)
+              #("data", ast.call(encoder, glance.Variable("data")))
+            }
+            lift.Array(i) -> {
+              let encoder = schema.to_encoder(lift.Array(i), module)
+              #("data", ast.call(encoder, glance.Variable("data")))
+            }
+            lift.Tuple(es) -> {
+              let encoder = schema.to_encoder(lift.Tuple(es), module)
+              #("data", ast.call(encoder, glance.Variable("data")))
+            }
+            lift.Compound(t) -> {
+              // let encoder = schema.to_encoder(lift.Primitive(p),module)
+              // echo encoder
+              todo
+            }
+            lift.Dictionary(f) -> {
+              let encoder = schema.to_encoder(lift.Dictionary(f), module)
+              #("data", ast.call(encoder, glance.Variable("data")))
+            }
+            lift.Unsupported -> {
+              let encoder = schema.to_encoder(lift.Unsupported, module)
+              #("data", ast.call(encoder, glance.Variable("data")))
             }
           }
+
+          Some(#(arg, ast.call1("utils", "json_to_bits", json)))
+        }
         // No content
         [], [] -> None
         [], [#(unknown, _)] -> {

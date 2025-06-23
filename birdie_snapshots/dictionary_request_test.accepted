@@ -1,0 +1,38 @@
+---
+version: 1.3.0
+title: dictionary_request_test
+file: ./test/oas/generator/operations_test.gleam
+test_name: dictionary_request_test
+---
+import gleam/bool
+import gleam/result
+import gleam/dynamic/decode
+import gleam/json
+import gleam/float
+import gleam/int
+import gleam/http/response
+import gleam/http
+import myservice/schema
+import myservice/utils
+import gleam/option.{type Option, None}
+
+pub fn set_params_request(base, data) {
+  let method = http.Post
+  let path = "/params"
+  let query = []
+  let body = utils.json_to_bits(utils.dict(data, json.int))
+  base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
+    query,
+  ) |> utils.set_body("application/json", body)
+}
+
+pub fn set_params_response(response) {
+  let response.Response(status:, body:, ..) = response
+  case status {
+    204 -> json.parse_bits(
+      body,
+      decode.new_primitive_decoder("Dynamic", fn(raw) { Ok(raw) }),
+    ) |> result.map(Ok)
+    _ -> response |> Error |> Ok
+  }
+}

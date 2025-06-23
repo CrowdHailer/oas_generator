@@ -153,24 +153,26 @@ fn to_type(lifted, module) {
 
 /// This handles top to encoder
 fn schema_to_encoder(entry) {
+  let module = misc.Schema
   let #(name, top) = entry
   let type_ = ast.name_for_gleam_type(name)
 
   let arg = glance.Variable("data")
   let exp = case top {
     lift.Named(n) ->
-      to_encoder(lift.Named(n)) |> glance.Call([glance.UnlabelledField(arg)])
+      to_encoder(lift.Named(n), module)
+      |> glance.Call([glance.UnlabelledField(arg)])
     lift.Primitive(lift.Null) -> ast.call0("json", "null")
     lift.Primitive(lift.Always) -> arg
     lift.Primitive(lift.Never) ->
       glance.Panic(Some(glance.String("never value cannot be encoded")))
     lift.Primitive(p) ->
-      to_encoder(lift.Primitive(p))
+      to_encoder(lift.Primitive(p), module)
       |> glance.Call([glance.UnlabelledField(arg)])
     lift.Array(items) -> {
-      ast.call2("json", "array", arg, to_encoder(items))
+      ast.call2("json", "array", arg, to_encoder(items, module))
     }
-    lift.Tuple(items) -> encode_tuple_body(items, arg)
+    lift.Tuple(items) -> encode_tuple_body(items, arg, module)
     lift.Compound(lift.Fields(properties, additional, required)) -> {
       ast.call1(
         "json",
@@ -180,7 +182,7 @@ fn schema_to_encoder(entry) {
             let #(key, #(schema, nullable)) = property
             let arg = ast.access("data", ast.name_for_gleam_field_or_var(key))
 
-            let cast = to_encoder(schema)
+            let cast = to_encoder(schema, module)
             let value = case !list.contains(required, key) || nullable {
               False -> glance.Call(cast, [glance.UnlabelledField(arg)])
               True -> ast.call2("json", "nullable", arg, cast)
@@ -204,7 +206,7 @@ fn schema_to_encoder(entry) {
                     None,
                     [
                       glance.Expression(
-                        glance.Call(to_encoder(values), [
+                        glance.Call(to_encoder(values, module), [
                           glance.UnlabelledField(glance.Variable("value")),
                         ]),
                       ),
@@ -218,7 +220,7 @@ fn schema_to_encoder(entry) {
       )
     }
     lift.Dictionary(values) ->
-      ast.call2("utils", "dict", arg, to_encoder(values))
+      ast.call2("utils", "dict", arg, to_encoder(values, module))
     lift.Unsupported -> arg
   }
 
@@ -250,10 +252,15 @@ fn schema_to_encoder(entry) {
 }
 
 /// This handles a lifted encoder
-fn to_encoder(lifted) {
+pub fn to_encoder(lifted, module) {
   case lifted {
-    lift.Named("#/components/schemas/" <> inner) ->
-      glance.Variable(encode_fn(inner))
+    lift.Named("#/components/schemas/" <> inner) -> {
+      let func = encode_fn(inner)
+      case module {
+        misc.Schema -> glance.Variable(func)
+        _ -> ast.access("schema", func)
+      }
+    }
     lift.Named(..) -> panic as "unexpected ref"
     lift.Primitive(lift.Boolean) -> ast.access("json", "bool")
     lift.Primitive(lift.Integer) -> ast.access("json", "int")
@@ -281,16 +288,24 @@ fn to_encoder(lifted) {
         ),
       ])
     lift.Array(items) -> {
-      ast.call2("json", "array", glance.Variable("_"), to_encoder(items))
+      glance.FnCapture(None, ast.access("json", "array"), [], [
+        glance.UnlabelledField(to_encoder(items, module)),
+      ])
     }
     lift.Tuple(items) ->
       glance.Fn([glance.FnParameter(glance.Named("data"), None)], None, [
-        glance.Expression(encode_tuple_body(items, glance.Variable("data"))),
+        glance.Expression(encode_tuple_body(
+          items,
+          glance.Variable("data"),
+          module,
+        )),
       ])
     lift.Compound(index) ->
       glance.Variable(encode_fn("internal_" <> int.to_string(index)))
     lift.Dictionary(values) ->
-      ast.call2("utils", "dict", glance.Variable("_"), to_encoder(values))
+      glance.FnCapture(None, ast.access("utils", "dict"), [], [
+        glance.UnlabelledField(to_encoder(values, module)),
+      ])
     lift.Unsupported ->
       glance.Fn([glance.FnParameter(glance.Named("data"), None)], None, [
         glance.Expression(glance.Variable("data")),
@@ -298,13 +313,13 @@ fn to_encoder(lifted) {
   }
 }
 
-fn encode_tuple_body(items, arg) {
+fn encode_tuple_body(items, arg, module) {
   ast.call1(
     "utils",
     "merge",
     glance.List(
       list.index_map(items, fn(item, index) {
-        glance.Call(to_encoder(item), [
+        glance.Call(to_encoder(item, module), [
           glance.UnlabelledField(glance.TupleIndex(arg, index)),
         ])
       }),

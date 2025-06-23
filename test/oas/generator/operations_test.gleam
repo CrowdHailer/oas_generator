@@ -1,11 +1,23 @@
 import birdie
 import gleam/dict
 import gleam/http
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import oas
 import oas/generator as gen
 
 const just_string = oas.String(None, None, None, None, False, None, None, False)
+
+const just_integer = oas.Integer(
+  None,
+  None,
+  None,
+  None,
+  None,
+  False,
+  None,
+  None,
+  False,
+)
 
 fn array(items) {
   oas.Array(None, None, False, items, False, None, None, False)
@@ -25,6 +37,10 @@ fn object(params, required) {
   )
 }
 
+fn dict(of) {
+  oas.Object(dict.new(), [], Some(of), None, 0, False, None, None, False)
+}
+
 const no_info = oas.Info("title", None, None, None, None, None, "3.1.0")
 
 fn operation(id, parameters, request_body, responses) {
@@ -39,20 +55,24 @@ fn operation(id, parameters, request_body, responses) {
   )
 }
 
-fn get(id, parameters, request_body, responses) {
-  #(http.Get, operation(id, parameters, request_body, responses))
+fn get(id, parameters, responses) {
+  #(http.Get, operation(id, parameters, None, responses))
+}
+
+fn post(id, parameters, request_body, responses) {
+  #(http.Post, operation(id, parameters, Some(request_body), responses))
 }
 
 fn path(p, items) {
   #(p, oas.PathItem(None, None, [], items))
 }
 
-fn json(schema) {
-  oas.Inline(oas.Response(
-    None,
-    dict.new(),
-    dict.from_list([#("application/json", oas.MediaType(schema))]),
-  ))
+fn json_response(schema) {
+  oas.Inline(oas.Response(None, dict.new(), just_json(schema)))
+}
+
+fn just_json(schema) {
+  dict.from_list([#("application/json", oas.MediaType(schema))])
 }
 
 fn ref(schema) {
@@ -63,7 +83,7 @@ pub fn single_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [#(oas.Status(200), json(ref("account")))]),
+        get("get_users", [], [#(oas.Status(200), json_response(ref("account")))]),
       ]),
     ])
   let components =
@@ -74,14 +94,89 @@ pub fn single_response_test() {
   birdie.snap(ops, "get_test")
 }
 
+pub fn just_string_request_test() {
+  let paths =
+    dict.from_list([
+      path("/number", [
+        post(
+          "upload-number",
+          [],
+          oas.Inline(oas.RequestBody(
+            None,
+            just_json(oas.Inline(just_integer)),
+            True,
+          )),
+          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+        ),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "just_string_request_test")
+}
+
+pub fn dictionary_request_test() {
+  let paths =
+    dict.from_list([
+      path("/params", [
+        post(
+          "set_params",
+          [],
+          oas.Inline(oas.RequestBody(
+            None,
+            just_json(oas.Inline(dict(oas.Inline(just_integer)))),
+            True,
+          )),
+          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+        ),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "dictionary_request_test")
+}
+
+pub fn request_body_named_test() {
+  let paths =
+    dict.from_list([
+      path("/params", [
+        post(
+          "set_params",
+          [],
+          oas.Inline(oas.RequestBody(
+            None,
+            just_json(oas.Ref("#/components/schemas/params", None, None)),
+            True,
+          )),
+          [],
+        ),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "request_body_named_test")
+}
+
+// TODO inline body object
+// TODO inline body no objects
+
 pub fn single_inline_object_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [
+        get("get_users", [], [
           #(
             oas.Status(200),
-            json(
+            json_response(
               oas.Inline(
                 object(
                   [
@@ -108,10 +203,10 @@ pub fn nested_object_in_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("users/get_users", [], None, [
+        get("users/get_users", [], [
           #(
             oas.Status(200),
-            json(
+            json_response(
               oas.Inline(
                 object(
                   [
@@ -152,8 +247,7 @@ pub fn array_parameters_response_test() {
               oas.Inline(array(oas.Inline(just_string))),
             )),
           ],
-          None,
-          [#(oas.Status(200), json(ref("account")))],
+          [#(oas.Status(200), json_response(ref("account")))],
         ),
       ]),
     ])
@@ -169,7 +263,7 @@ pub fn no_content_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [
+        get("get_users", [], [
           #(
             oas.Status(204),
             oas.Inline(oas.Response(None, dict.new(), dict.new())),
@@ -189,10 +283,10 @@ pub fn multiple_error_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [
-          #(oas.Status(200), json(ref("account"))),
-          #(oas.Status(400), json(ref("error"))),
-          #(oas.Status(401), json(ref("error"))),
+        get("get_users", [], [
+          #(oas.Status(200), json_response(ref("account"))),
+          #(oas.Status(400), json_response(ref("error"))),
+          #(oas.Status(401), json_response(ref("error"))),
         ]),
       ]),
     ])
@@ -211,8 +305,8 @@ pub fn alway_pass_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [
-          #(oas.Status(200), json(oas.Inline(oas.AlwaysPasses))),
+        get("get_users", [], [
+          #(oas.Status(200), json_response(oas.Inline(oas.AlwaysPasses))),
         ]),
       ]),
     ])
@@ -228,10 +322,10 @@ pub fn alway_field_pass_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], None, [
+        get("get_users", [], [
           #(
             oas.Status(200),
-            json(
+            json_response(
               oas.Inline(
                 object([#("meta", oas.Inline(oas.AlwaysPasses))], ["meta"]),
               ),

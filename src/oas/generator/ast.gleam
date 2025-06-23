@@ -1,10 +1,21 @@
 import glance
 import gleam/list
+import gleam/option.{None}
 import gleam/string
 import justin
 
 pub fn access(object_or_mod, field) {
   glance.FieldAccess(glance.Variable(object_or_mod), field)
+}
+
+pub fn call(f, arg) {
+  case f {
+    glance.FnCapture(None, f, before, after) -> {
+      let args = list.flatten([before, [glance.UnlabelledField(arg)], after])
+      glance.Call(f, args)
+    }
+    _ -> glance.Call(f, [glance.UnlabelledField(arg)])
+  }
 }
 
 pub fn call0(m, f) {
