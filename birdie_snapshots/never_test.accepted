@@ -12,7 +12,7 @@ import gleam/dynamic/decode
 import gleam/dict
 
 pub type Yes =
-  Never
+  utils.Never
 
 pub fn yes_decoder() {
   decode.new_primitive_decoder("Never", fn(_) { Error(Nil) })

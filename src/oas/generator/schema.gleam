@@ -130,9 +130,9 @@ fn to_type(lifted, module) {
         lift.Integer -> glance.NamedType("Int", None, [])
         lift.Number -> glance.NamedType("Float", None, [])
         lift.String -> glance.NamedType("String", None, [])
-        lift.Null -> glance.NamedType("Null", None, [])
+        lift.Null -> glance.NamedType("Nil", None, [])
         lift.Always -> glance.NamedType("Json", Some("json"), [])
-        lift.Never -> glance.NamedType("Never", None, [])
+        lift.Never -> glance.NamedType("Never", Some("utils"), [])
       }
     }
     lift.Array(items) ->
@@ -147,7 +147,7 @@ fn to_type(lifted, module) {
         glance.NamedType("String", None, []),
         to_type(values, module),
       ])
-    lift.Unsupported -> glance.NamedType("Dynamic", Some("dynamic"), [])
+    lift.Unsupported -> glance.NamedType("Json", Some("json"), [])
   }
 }
 
@@ -503,7 +503,7 @@ pub fn to_decoder(lifted, module) {
         ast.access("decode", "string"),
         to_decoder(values, module),
       )
-    lift.Unsupported -> dynamic_decode()
+    lift.Unsupported -> ast.call0("utils", "dynamic_to_json")
   }
 }
 
@@ -540,21 +540,6 @@ fn never_decode() {
       glance.Expression(
         glance.Call(glance.Variable("Error"), [
           glance.UnlabelledField(glance.Variable("Nil")),
-        ]),
-      ),
-    ]),
-  )
-}
-
-fn dynamic_decode() {
-  ast.call2(
-    "decode",
-    "new_primitive_decoder",
-    glance.String("Dynamic"),
-    glance.Fn([glance.FnParameter(glance.Named("raw"), None)], None, [
-      glance.Expression(
-        glance.Call(glance.Variable("Ok"), [
-          glance.UnlabelledField(glance.Variable("raw")),
         ]),
       ),
     ]),
