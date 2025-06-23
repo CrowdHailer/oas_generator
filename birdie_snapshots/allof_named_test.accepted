@@ -38,7 +38,7 @@ pub fn b_decoder() {
 }
 
 pub fn b_encode(data: B) {
-  json.object([#("b", json.string(data.b))])
+  utils.object([#("b", json.string(data.b))])
 }
 
 pub fn a_decoder() {
@@ -47,5 +47,5 @@ pub fn a_decoder() {
 }
 
 pub fn a_encode(data: A) {
-  json.object([#("a", json.string(data.a))])
+  utils.object([#("a", json.string(data.a))])
 }

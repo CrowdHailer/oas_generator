@@ -25,7 +25,7 @@ pub fn set_params_request(base, data: SetParamsRequest) {
   let path = "/params"
   let query = []
   let body = utils.json_to_bits(
-    json.object(
+    utils.object(
       [
         #("shape", json.nullable(data.shape, schema.shape_encode)),
         #("size", json.nullable(data.size, json.int))

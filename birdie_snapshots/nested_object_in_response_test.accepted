@@ -50,5 +50,5 @@ pub fn internal_0_decoder() {
 }
 
 pub fn internal_0_encode(data: Internal0) {
-  json.object([#("param", json.string(data.param))])
+  utils.object([#("param", json.string(data.param))])
 }

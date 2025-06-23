@@ -24,7 +24,7 @@ pub fn preference_decoder() {
 }
 
 pub fn preference_encode(data: Preference) {
-  json.object(
+  utils.object(
     [
       #("colour", json.string(data.colour)),
       ..dict.to_list(

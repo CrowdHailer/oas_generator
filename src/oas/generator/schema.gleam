@@ -210,7 +210,7 @@ pub fn to_encode_fn(entry, module) {
 
 pub fn fields_to_encode_body(properties, required, additional, module) {
   ast.call1(
-    "json",
+    "utils",
     "object",
     glance.List(
       list.map(properties, fn(property) {

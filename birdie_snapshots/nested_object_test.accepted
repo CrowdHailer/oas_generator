@@ -33,7 +33,7 @@ pub fn internal_1_decoder() {
 }
 
 pub fn internal_1_encode(data: Internal1) {
-  json.object([#("fish", json.string(data.fish))])
+  utils.object([#("fish", json.string(data.fish))])
 }
 
 pub fn internal_0_decoder() {
@@ -42,7 +42,7 @@ pub fn internal_0_decoder() {
 }
 
 pub fn internal_0_encode(data: Internal0) {
-  json.object([#("fish", json.int(data.fish))])
+  utils.object([#("fish", json.int(data.fish))])
 }
 
 pub fn big_box_decoder() {
@@ -51,7 +51,7 @@ pub fn big_box_decoder() {
 }
 
 pub fn big_box_encode(data: BigBox) {
-  json.object([#("little_box", internal_1_encode(data.little_box))])
+  utils.object([#("little_box", internal_1_encode(data.little_box))])
 }
 
 pub fn big_bird_decoder() {
@@ -60,5 +60,5 @@ pub fn big_bird_decoder() {
 }
 
 pub fn big_bird_encode(data: BigBird) {
-  json.object([#("little_bird", internal_0_encode(data.little_bird))])
+  utils.object([#("little_bird", internal_0_encode(data.little_bird))])
 }

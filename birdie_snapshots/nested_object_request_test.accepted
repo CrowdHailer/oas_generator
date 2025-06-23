@@ -45,7 +45,7 @@ pub fn internal_0_decoder() {
 }
 
 pub fn internal_0_encode(data: Internal0) {
-  json.object(
+  utils.object(
     [
       #("flavour", schema.flavour_encode(data.flavour)),
       #("id", json.int(data.id))
