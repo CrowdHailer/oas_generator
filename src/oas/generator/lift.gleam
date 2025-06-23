@@ -133,12 +133,12 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
                   },
                 )
               let #(additional, acc) = case additional_properties {
+                None | Some(oas.Inline(oas.AlwaysFails)) -> #(None, acc)
                 Some(values) -> {
                   let #(top, _, acc) = do_lift(values, acc)
                   let #(schema, acc) = not_top(top, acc)
                   #(Some(schema), acc)
                 }
-                None -> #(None, acc)
               }
               #(
                 Compound(Fields(properties, additional, required)),

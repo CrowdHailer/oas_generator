@@ -1,0 +1,25 @@
+---
+version: 1.3.0
+title: explicitly_no_additional_test
+file: ./test/oas/generator_test.gleam
+test_name: explicitly_no_additional_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/dict
+
+pub type Preference {
+  Preference(colour: String)
+}
+
+pub fn preference_decoder() {
+  use colour <- decode.field("colour", decode.string)
+  decode.success(Preference(colour: colour))
+}
+
+pub fn preference_encode(data: Preference) {
+  utils.object([#("colour", json.string(data.colour))])
+}

@@ -191,6 +191,26 @@ pub fn object_and_additional_test() {
   |> birdie.snap(title: "object_and_additional_test")
 }
 
+pub fn explicitly_no_additional_test() {
+  schema([
+    #(
+      "Preference",
+      oas.Object(
+        dict.from_list([#("colour", oas.Inline(just_string))]),
+        ["colour"],
+        Some(oas.Inline(oas.AlwaysFails)),
+        None,
+        0,
+        False,
+        None,
+        None,
+        False,
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "explicitly_no_additional_test")
+}
+
 pub fn empty_object_is_dictionary_of_anything_test() {
   schema([#("Preference", object([], []))])
   |> birdie.snap(title: "empty_object_is_dictionary_of_anything_test")
