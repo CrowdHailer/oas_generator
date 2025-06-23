@@ -9,6 +9,7 @@ import myservice/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/dict
 
 pub type Bag =
   dict.Dict(String, dict.Dict(String, Int))

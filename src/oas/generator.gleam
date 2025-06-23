@@ -767,6 +767,7 @@ pub fn gen_schema_file(schemas, provider) {
 
   glance.Module(
     [
+      glance.Definition([], glance.Import("gleam/dict", None, [], [])),
       glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
       glance.Definition([], glance.Import("gleam/dynamic", None, [], [])),
       glance.Definition([], glance.Import("gleam/json", None, [], [])),

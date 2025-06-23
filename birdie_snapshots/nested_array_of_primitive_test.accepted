@@ -1,5 +1,5 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: nested_array_of_primitive_test
 file: ./test/oas/generator_test.gleam
 test_name: nested_array_of_primitive_test
@@ -9,6 +9,7 @@ import myservice/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/dict
 
 pub type MyArray =
   List(List(Int))

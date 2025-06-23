@@ -1,5 +1,5 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: ref_object_schema_test
 file: ./test/oas/generator_test.gleam
 test_name: ref_object_schema_test
@@ -9,6 +9,7 @@ import myservice/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode
+import gleam/dict
 
 pub type User {
   User(name: Fullname)
