@@ -12,10 +12,10 @@ import gleam/dynamic/decode
 import gleam/dict
 
 pub type Yes =
-  dynamic.Dynamic
+  json.Json
 
 pub fn yes_decoder() {
-  decode.new_primitive_decoder("Dynamic", fn(raw) { Ok(raw) })
+  utils.dynamic_to_json()
 }
 
 pub fn yes_encode(data: Yes) {

@@ -131,7 +131,7 @@ fn to_type(lifted, module) {
         lift.Number -> glance.NamedType("Float", None, [])
         lift.String -> glance.NamedType("String", None, [])
         lift.Null -> glance.NamedType("Null", None, [])
-        lift.Always -> glance.NamedType("Dynamic", Some("dynamic"), [])
+        lift.Always -> glance.NamedType("Json", Some("json"), [])
         lift.Never -> glance.NamedType("Never", None, [])
       }
     }
@@ -469,7 +469,7 @@ pub fn to_decoder(lifted, module) {
         lift.Number -> ast.access("decode", "float")
         lift.String -> ast.access("decode", "string")
         lift.Null -> always_decode()
-        lift.Always -> dynamic_decode()
+        lift.Always -> ast.call0("utils", "dynamic_to_json")
         lift.Never -> never_decode()
       }
     lift.Tuple(items) -> {

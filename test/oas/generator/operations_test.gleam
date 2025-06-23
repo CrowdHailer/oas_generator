@@ -71,6 +71,10 @@ fn json_response(schema) {
   oas.Inline(oas.Response(None, dict.new(), just_json(schema)))
 }
 
+fn empty_response() {
+  oas.Inline(oas.Response(None, dict.new(), dict.new()))
+}
+
 fn just_json(schema) {
   dict.from_list([#("application/json", oas.MediaType(schema))])
 }
@@ -106,7 +110,7 @@ pub fn just_string_request_test() {
             just_json(oas.Inline(just_integer)),
             True,
           )),
-          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+          [#(oas.Status(204), empty_response())],
         ),
       ]),
     ])
@@ -143,7 +147,7 @@ pub fn object_request_test() {
             ),
             True,
           )),
-          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+          [#(oas.Status(204), empty_response())],
         ),
       ]),
     ])
@@ -184,7 +188,7 @@ pub fn nested_object_request_test() {
             ),
             True,
           )),
-          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+          [#(oas.Status(204), empty_response())],
         ),
       ]),
     ])
@@ -208,7 +212,7 @@ pub fn dictionary_request_test() {
             just_json(oas.Inline(dict(oas.Inline(just_integer)))),
             True,
           )),
-          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+          [#(oas.Status(204), empty_response())],
         ),
       ]),
     ])
@@ -338,12 +342,7 @@ pub fn no_content_response_test() {
   let paths =
     dict.from_list([
       path("/users", [
-        get("get_users", [], [
-          #(
-            oas.Status(204),
-            oas.Inline(oas.Response(None, dict.new(), dict.new())),
-          ),
-        ]),
+        get("get_users", [], [#(oas.Status(204), empty_response())]),
       ]),
     ])
   let components =

@@ -27,12 +27,9 @@ pub fn set_params_request(base, data) {
 }
 
 pub fn set_params_response(response) {
-  let response.Response(status:, body:, ..) = response
+  let response.Response(status:, ..) = response
   case status {
-    204 -> json.parse_bits(
-      body,
-      decode.new_primitive_decoder("Dynamic", fn(raw) { Ok(raw) }),
-    ) |> result.map(Ok)
+    204 -> Ok(Nil) |> Ok
     _ -> response |> Error |> Ok
   }
 }

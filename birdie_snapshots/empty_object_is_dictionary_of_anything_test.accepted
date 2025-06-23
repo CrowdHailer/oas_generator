@@ -1,0 +1,23 @@
+---
+version: 1.3.0
+title: empty_object_is_dictionary_of_anything_test
+file: ./test/oas/generator_test.gleam
+test_name: empty_object_is_dictionary_of_anything_test
+---
+import gleam/option.{type Option, None}
+import myservice/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/dict
+
+pub type Preference =
+  dict.Dict(String, json.Json)
+
+pub fn preference_decoder() {
+  decode.dict(decode.string, utils.dynamic_to_json())
+}
+
+pub fn preference_encode(data: Preference) {
+  utils.dict(data, fn(data) { data })
+}

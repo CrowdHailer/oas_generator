@@ -191,6 +191,11 @@ pub fn object_and_additional_test() {
   |> birdie.snap(title: "object_and_additional_test")
 }
 
+pub fn empty_object_is_dictionary_of_anything_test() {
+  schema([#("Preference", object([], []))])
+  |> birdie.snap(title: "empty_object_is_dictionary_of_anything_test")
+}
+
 pub fn allof_named_test() {
   schema([
     #("A", object([#("a", oas.Inline(just_string))], ["a"])),
