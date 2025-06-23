@@ -38,9 +38,40 @@ pub type Primitive {
   Never
 }
 
-pub fn lift(schema) {
-  do_lift(schema, [])
-}
+// Can totally manually pass in config i.e. encoded/decode or even name 
+// pub fn lift(schema) {
+//   do_lift(schema, [])
+// }
+
+// pub type Return {
+//   // Nil because we wouldn't use Compout
+//   Done(Schema(Int))
+//   Name(Fields, fn(Schema(Int)) -> Return)
+// }
+
+// fn recur(schema) -> Return {
+//   case schema {
+//     oas.Ref(ref:, ..) -> Done(Named(ref))
+//     oas.Inline(schema) ->
+//       case schema {
+//         oas.Boolean(..) -> Done(Primitive(Boolean))
+//         oas.Array(items:, ..) ->
+//           case recur(items) {
+//             Done(items) -> Done(Array(items))
+//             Name(inner, f) -> Name(inner, fn(ref) { todo })
+//           }
+//         _ -> todo
+//       }
+//     _ -> todo
+//   }
+// }
+
+// fn then(r, g) {
+//   case r {
+//     Done(schema) -> Done(schema)
+//     Name(fields, f) -> Name(fields, fn(schema) { then(g(schema), f) })
+//   }
+// }
 
 fn not_top(top: Top, acc) -> #(Lifted, _) {
   case top {
@@ -58,6 +89,7 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
   }
 }
 
+// nullable is ignored at the moment
 pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
   case schema {
     oas.Ref(ref:, ..) -> #(Named(ref), False, acc)

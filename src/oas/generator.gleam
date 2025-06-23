@@ -162,10 +162,10 @@ fn gen_request_for_op(
   pattern,
   path_parameters,
   components: oas.Components,
+  internal,
 ) {
   let #(method, op) = op_entry
-  let oas.Operation(operation_id: id, parameters: op_parameters, ..) = op
-  let id = ast.name_for_gleam_field_or_var(id)
+  let oas.Operation(operation_id:, parameters: op_parameters, ..) = op
 
   let parameters = list.append(op_parameters, path_parameters)
   let parameters =
@@ -182,65 +182,91 @@ fn gen_request_for_op(
   }
 
   let module = misc.Operations
-  let body = case op.request_body {
+  let #(custom_type, body, internal) = case op.request_body {
     Some(body) -> {
       let oas.RequestBody(content: content, ..) =
         oas.fetch_request_body(body, components.request_bodies)
       let #(known, unknown) = get_structure_json_media(content)
       case known, unknown {
         [#(_, oas.MediaType(schema))], _ -> {
-          // TODO replace internal
-          let internal = []
           let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
-          let #(arg, json) = case lifted {
+          let #(custom_type, arg, json) = case lifted {
             lift.Named(n) -> {
               let encoder = schema.to_encoder(lift.Named(n), module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
             lift.Primitive(p) -> {
               let encoder = schema.to_encoder(lift.Primitive(p), module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
             lift.Array(i) -> {
               let encoder = schema.to_encoder(lift.Array(i), module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
             lift.Tuple(es) -> {
               let encoder = schema.to_encoder(lift.Tuple(es), module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
-            lift.Compound(t) -> {
-              // let encoder = schema.to_encoder(lift.Primitive(p),module)
-              // echo encoder
-              todo
+            lift.Compound(lift.Fields(named:, additional:, required:)) -> {
+              let name = ast.name_for_gleam_type(operation_id <> "-request")
+              let type_ =
+                schema.custom_type(name, named, additional, required, module)
+              #(
+                Some(type_),
+                "data",
+                schema.fields_to_encode_body(
+                  named,
+                  required,
+                  additional,
+                  module,
+                ),
+              )
             }
             lift.Dictionary(f) -> {
               let encoder = schema.to_encoder(lift.Dictionary(f), module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
             lift.Unsupported -> {
               let encoder = schema.to_encoder(lift.Unsupported, module)
-              #("data", ast.call(encoder, glance.Variable("data")))
+              #(None, "data", ast.call(encoder, glance.Variable("data")))
             }
           }
 
-          Some(#(arg, ast.call1("utils", "json_to_bits", json)))
+          #(
+            custom_type,
+            Some(#(arg, ast.call1("utils", "json_to_bits", json))),
+            internal,
+          )
         }
         // No content
-        [], [] -> None
+        [], [] -> #(None, None, internal)
         [], [#(unknown, _)] -> {
           io.println("unknown content type: " <> unknown)
-          None
+          #(None, None, internal)
         }
         _, _ -> {
           io.println("multiple content types not supported")
-          None
+          #(None, None, internal)
         }
       }
     }
-    None -> None
+    None -> #(None, None, internal)
   }
-  let parameters =
+  let parameters_for_operation_functions =
+    path_args(match)
+    |> list.append(case body {
+      Some(#(arg, _)) -> [
+        glance.FunctionParameter(None, glance.Named(arg), case custom_type {
+          Some(glance.CustomType(name:, ..)) ->
+            Some(glance.NamedType(name, None, []))
+          None -> None
+        }),
+      ]
+      None -> []
+    })
+    |> list.append(q_args)
+  // These are not annotated with the type because the type is only internal in the operations file
+  let parameters_for_top_functions =
     path_args(match)
     |> list.append(case body {
       Some(#(arg, _)) -> [
@@ -249,9 +275,9 @@ fn gen_request_for_op(
       None -> []
     })
     |> list.append(q_args)
-
-  let op_request = id <> "_request"
-  let op_response = id <> "_response"
+  let fn_name = ast.name_for_gleam_field_or_var(operation_id)
+  let op_request = fn_name <> "_request"
+  let op_response = fn_name <> "_response"
 
   let req_fn =
     glance.Function(
@@ -259,7 +285,7 @@ fn gen_request_for_op(
       publicity: glance.Public,
       parameters: [
         glance.FunctionParameter(None, glance.Named("base"), None),
-        ..parameters
+        ..parameters_for_operation_functions
       ],
       return: None,
       body: [
@@ -306,11 +332,11 @@ fn gen_request_for_op(
     )
   let fn_ =
     glance.Function(
-      name: id,
+      name: fn_name,
       publicity: glance.Public,
       parameters: [
         glance.FunctionParameter(None, glance.Named("token"), None),
-        ..parameters
+        ..parameters_for_top_functions
       ],
       return: None,
       body: [
@@ -324,7 +350,7 @@ fn gen_request_for_op(
           "request",
           glance.Call(ast.access("operations", op_request), [
             glance.UnlabelledField(glance.Variable("request")),
-            ..list.map(parameters, fn(p) {
+            ..list.map(parameters_for_top_functions, fn(p) {
               let assert glance.FunctionParameter(name: glance.Named(name), ..) =
                 p
               glance.UnlabelledField(glance.Variable(name))
@@ -357,7 +383,7 @@ fn gen_request_for_op(
       ],
       location: glance.Span(0, 0),
     )
-  #(fn_, req_fn)
+  #(fn_, req_fn, custom_type, internal)
 }
 
 fn gen_content_handling(operation_id, content, wrapper, internal) {
@@ -563,25 +589,35 @@ fn gen_response(operation, components: oas.Components, internal) {
 }
 
 // This returns functions for the top level and operations file
-fn gen_fns(key, path_item: oas.PathItem, components, exclude, internal) {
+fn gen_fns(key, path_item: oas.PathItem, components, exclude, acc) {
   let operations =
     list.filter(path_item.operations, fn(op) {
       !list.contains(exclude, { op.1 }.operation_id)
     })
 
-  list.map_fold(operations, internal, fn(internal, op) {
-    let #(fn_, req_fn) =
-      gen_request_for_op(op, key, path_item.parameters, components)
+  list.map_fold(operations, acc, fn(acc, op) {
+    let #(custom_types, internal) = acc
+    let #(fn_, req_fn, custom_type, internal) =
+      gen_request_for_op(op, key, path_item.parameters, components, internal)
+    let custom_types = case custom_type {
+      Some(t) -> [t, ..custom_types]
+      None -> custom_types
+    }
+
     let #(#(response_handler, response_type), internal) =
       gen_response(op, components, internal)
-    #(internal, #(#([response_handler, req_fn], response_type), fn_))
+
+    #(#(custom_types, internal), #(
+      #([response_handler, req_fn], response_type),
+      fn_,
+    ))
   })
 }
 
-fn gen_operations(op, components, exclude, internal) {
+fn gen_operations(op, components, exclude, acc) {
   let #(key, path) = op
 
-  gen_fns(key, path, components, exclude, internal)
+  gen_fns(key, path, components, exclude, acc)
 }
 
 fn defs(xs) {
@@ -651,16 +687,18 @@ pub fn build(spec_src, project_path, provider, exclude) {
 
 pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let paths = dict.to_list(spec.paths)
+  let custom_types = []
   let internal = []
-  let #(internal, fs) =
-    list.map_fold(paths, internal, fn(internal, path) {
-      gen_operations(path, spec.components, exclude, internal)
+  let #(#(custom_types, internal), fs) =
+    list.map_fold(paths, #(custom_types, internal), fn(acc, path) {
+      gen_operations(path, spec.components, exclude, acc)
     })
-  let #(internal_types, internal_decoders) =
+  let #(internal_types, internal_fns) =
     list.index_map(internal, fn(fields, index) {
       let lift.Fields(properties, additional, required) = fields
-      let name = "Internal" <> int.to_string(index)
+      let name = "Internal_" <> int.to_string(index)
       // TODO use a better schema function as this needs keeping in track for dictionaries etc
+      let module = misc.Operations
       let type_ =
         schema.custom_type(
           name,
@@ -670,8 +708,9 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
           misc.Operations,
         )
 
-      let encoder = schema.to_decode_fn(#(name, lift.Compound(fields)))
-      #(type_, encoder)
+      let encoder = schema.to_encode_fn(#(name, lift.Compound(fields)), module)
+      let decoder = schema.to_decode_fn(#(name, lift.Compound(fields)), module)
+      #(type_, [encoder, decoder])
     })
     |> list.unzip
 
@@ -679,6 +718,8 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let #(operation_functions, operation_types) = list.unzip(operation_functions)
   let operation_types =
     list.filter_map(operation_types, option.to_result(_, Nil))
+  // Operation types are the response types
+  let operation_types = list.append(operation_types, custom_types)
   let operation_functions = list.flatten(operation_functions)
 
   let modules = [
@@ -709,7 +750,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
       [],
       [],
       list.map(
-        list.append(internal_decoders, operation_functions),
+        list.append(list.flatten(internal_fns), operation_functions),
         glance.Definition([], _),
       ),
     )

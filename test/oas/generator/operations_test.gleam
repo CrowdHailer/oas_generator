@@ -118,6 +118,84 @@ pub fn just_string_request_test() {
   birdie.snap(ops, "just_string_request_test")
 }
 
+pub fn object_request_test() {
+  let paths =
+    dict.from_list([
+      path("/params", [
+        post(
+          "set_params",
+          [],
+          oas.Inline(oas.RequestBody(
+            None,
+            just_json(
+              oas.Inline(
+                object(
+                  [
+                    #("size", oas.Inline(just_integer)),
+                    #(
+                      "shape",
+                      oas.Ref("#/components/schemas/Shape", None, None),
+                    ),
+                  ],
+                  [],
+                ),
+              ),
+            ),
+            True,
+          )),
+          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+        ),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "object_request_test")
+}
+
+pub fn nested_object_request_test() {
+  let paths =
+    dict.from_list([
+      path("/params", [
+        post(
+          "set_params",
+          [],
+          oas.Inline(oas.RequestBody(
+            None,
+            just_json(
+              oas.Inline(
+                array(
+                  oas.Inline(
+                    object(
+                      [
+                        #("id", oas.Inline(just_integer)),
+                        #(
+                          "flavour",
+                          oas.Ref("#/components/schemas/Flavour", None, None),
+                        ),
+                      ],
+                      ["id", "flavour"],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            True,
+          )),
+          [#(oas.Status(204), json_response(oas.Inline(oas.AlwaysPasses)))],
+        ),
+      ]),
+    ])
+  let components =
+    oas.Components(dict.new(), dict.new(), dict.new(), dict.new())
+
+  let doc = oas.Document("", no_info, None, [], paths, components)
+  let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
+  birdie.snap(ops, "nested_object_request_test")
+}
+
 pub fn dictionary_request_test() {
   let paths =
     dict.from_list([
@@ -165,9 +243,6 @@ pub fn request_body_named_test() {
   let #(ops, _) = gen.gen_operations_and_top_files(doc, "myservice", [])
   birdie.snap(ops, "request_body_named_test")
 }
-
-// TODO inline body object
-// TODO inline body no objects
 
 pub fn single_inline_object_response_test() {
   let paths =

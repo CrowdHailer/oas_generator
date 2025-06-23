@@ -34,8 +34,8 @@ pub fn generate(schemas) {
     let #(custom_types, type_aliases, fns) = acc
     let fns =
       list.append(fns, [
-        schema_to_encoder(#(name, top)),
-        to_decode_fn(#(name, top)),
+        to_encode_fn(#(name, top), module),
+        to_decode_fn(#(name, top), module),
       ])
     let name = ast.name_for_gleam_type(name)
     let #(custom_types, type_aliases) = case top {
@@ -152,8 +152,8 @@ fn to_type(lifted, module) {
 }
 
 /// This handles top to encoder
-fn schema_to_encoder(entry) {
-  let module = misc.Schema
+/// TODO make this private
+pub fn to_encode_fn(entry, module) {
   let #(name, top) = entry
   let type_ = ast.name_for_gleam_type(name)
 
@@ -174,50 +174,7 @@ fn schema_to_encoder(entry) {
     }
     lift.Tuple(items) -> encode_tuple_body(items, arg, module)
     lift.Compound(lift.Fields(properties, additional, required)) -> {
-      ast.call1(
-        "json",
-        "object",
-        glance.List(
-          list.map(properties, fn(property) {
-            let #(key, #(schema, nullable)) = property
-            let arg = ast.access("data", ast.name_for_gleam_field_or_var(key))
-
-            let cast = to_encoder(schema, module)
-            let value = case !list.contains(required, key) || nullable {
-              False -> glance.Call(cast, [glance.UnlabelledField(arg)])
-              True -> ast.call2("json", "nullable", arg, cast)
-            }
-            glance.Tuple([glance.String(key), value])
-          }),
-          case additional {
-            Some(values) ->
-              Some(ast.call1(
-                "dict",
-                "to_list",
-                ast.call2(
-                  "dict",
-                  "map_values",
-                  ast.access("data", "additional_properties"),
-                  glance.Fn(
-                    [
-                      glance.FnParameter(glance.Discarded("key"), None),
-                      glance.FnParameter(glance.Named("value"), None),
-                    ],
-                    None,
-                    [
-                      glance.Expression(
-                        glance.Call(to_encoder(values, module), [
-                          glance.UnlabelledField(glance.Variable("value")),
-                        ]),
-                      ),
-                    ],
-                  ),
-                ),
-              ))
-            None -> None
-          },
-        ),
-      )
+      fields_to_encode_body(properties, required, additional, module)
     }
     lift.Dictionary(values) ->
       ast.call2("utils", "dict", arg, to_encoder(values, module))
@@ -248,6 +205,53 @@ fn schema_to_encoder(entry) {
     return: None,
     body: [glance.Expression(exp)],
     location: glance.Span(0, 0),
+  )
+}
+
+pub fn fields_to_encode_body(properties, required, additional, module) {
+  ast.call1(
+    "json",
+    "object",
+    glance.List(
+      list.map(properties, fn(property) {
+        let #(key, #(schema, nullable)) = property
+        let arg = ast.access("data", ast.name_for_gleam_field_or_var(key))
+
+        let cast = to_encoder(schema, module)
+        let value = case !list.contains(required, key) || nullable {
+          False -> glance.Call(cast, [glance.UnlabelledField(arg)])
+          True -> ast.call2("json", "nullable", arg, cast)
+        }
+        glance.Tuple([glance.String(key), value])
+      }),
+      case additional {
+        Some(values) ->
+          Some(ast.call1(
+            "dict",
+            "to_list",
+            ast.call2(
+              "dict",
+              "map_values",
+              ast.access("data", "additional_properties"),
+              glance.Fn(
+                [
+                  glance.FnParameter(glance.Discarded("key"), None),
+                  glance.FnParameter(glance.Named("value"), None),
+                ],
+                None,
+                [
+                  glance.Expression(
+                    glance.Call(to_encoder(values, module), [
+                      glance.UnlabelledField(glance.Variable("value")),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+          ))
+        None -> None
+      },
+    ),
   )
 }
 
@@ -333,10 +337,10 @@ pub fn encode_fn(name) {
 }
 
 // TODO make this private
-pub fn to_decode_fn(entry) {
+pub fn to_decode_fn(entry, module) {
   let #(name, top) = entry
 
-  let body = gen_top_decoder_needs_name(name, top, misc.Schema)
+  let body = gen_top_decoder_needs_name(name, top, module)
   glance.Function(
     name: decoder(name),
     publicity: glance.Public,

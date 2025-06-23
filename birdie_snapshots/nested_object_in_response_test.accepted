@@ -44,7 +44,11 @@ pub fn users_get_users_response(response) {
   }
 }
 
-pub fn internal0_decoder() {
+pub fn internal_0_decoder() {
   use param <- decode.field("param", decode.string)
   decode.success(Internal0(param: param))
+}
+
+pub fn internal_0_encode(data: Internal0) {
+  json.object([#("param", json.string(data.param))])
 }
