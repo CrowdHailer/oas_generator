@@ -40,21 +40,35 @@ pub fn pipe(a, b) {
 // ------------------------------
 fn replace_gleam_keywords(key) {
   case key {
-    "type" -> "type_"
+    "as" -> "as_"
+    "assert" -> "assert_"
     "auto" -> "auto_"
+    "case" -> "case_"
+    "const" -> "const_"
+    "delegate" -> "delegate_"
+    "derive" -> "derive_"
+    "echo" -> "echo_"
+    "else" -> "else_"
+    "fn" -> "fn_"
+    "if" -> "if_"
+    "implement" -> "implement_"
     "import" -> "import_"
-    // used in places
+    "let" -> "let_"
+    "macro" -> "macro_"
+    "opaque" -> "opaque_"
+    "panic" -> "panic_"
+    "pub" -> "pub_"
+    "test" -> "test_"
+    "todo" -> "todo_"
+    "type" -> "type_"
+    "use" -> "use_"
+    // used as names within generated fns
     "base" -> "base_"
     "path" -> "path_"
     "method" -> "method_"
     "token" -> "token_"
     _ -> key
   }
-  // case key {
-  //   "_" <> key -> key
-  //   _ -> key
-  // }
-  // // github is weird
 }
 
 fn replace_disallowed_charachters(in) {
@@ -63,6 +77,8 @@ fn replace_disallowed_charachters(in) {
   |> string.replace("+", "_")
   // this is part of kebab casing
   // |> string.replace("-", "Minus")
+  |> string.replace("^", "")
+  |> string.replace("$", "")
 }
 
 fn prefix_numbers(in) {
