@@ -4,6 +4,7 @@ title: dictionary_request_test
 file: ./test/oas/generator/operations_test.gleam
 test_name: dictionary_request_test
 ---
+import gleam/dict
 import gleam/bool
 import gleam/result
 import gleam/dynamic/decode

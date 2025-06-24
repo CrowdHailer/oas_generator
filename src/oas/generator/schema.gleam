@@ -538,9 +538,9 @@ fn never_decode() {
     glance.String("Never"),
     glance.Fn([glance.FnParameter(glance.Discarded(""), None)], None, [
       glance.Expression(
-        glance.Call(glance.Variable("Error"), [
-          glance.UnlabelledField(glance.Variable("Nil")),
-        ]),
+        glance.Panic(
+          Some(glance.String("tried to decode a never decode value")),
+        ),
       ),
     ]),
   )

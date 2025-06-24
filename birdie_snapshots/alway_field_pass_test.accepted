@@ -4,6 +4,7 @@ title: alway_field_pass_test
 file: ./test/oas/generator/operations_test.gleam
 test_name: alway_field_pass_test
 ---
+import gleam/dict
 import gleam/bool
 import gleam/result
 import gleam/dynamic/decode

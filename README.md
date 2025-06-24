@@ -79,5 +79,9 @@ Further documentation can be found at <https://hexdocs.pm/oas_generator>.
 gleam test  # Run the tests
 ```
 
+## 📜 Notes
+
+Because the decoder requires a zero value, decoding of a never valid has to panic.
+
 ## 🧑‍💻 Credit
 Created for [Spotless](https://github.com/CrowdHailer/gleam_spotless), a code first integration platform.

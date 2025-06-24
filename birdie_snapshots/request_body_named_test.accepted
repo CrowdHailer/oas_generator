@@ -4,6 +4,7 @@ title: request_body_named_test
 file: ./test/oas/generator/operations_test.gleam
 test_name: request_body_named_test
 ---
+import gleam/dict
 import gleam/bool
 import gleam/result
 import gleam/dynamic/decode

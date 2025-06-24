@@ -15,7 +15,10 @@ pub type Yes =
   utils.Never
 
 pub fn yes_decoder() {
-  decode.new_primitive_decoder("Never", fn(_) { Error(Nil) })
+  decode.new_primitive_decoder(
+    "Never",
+    fn(_) { panic as "tried to decode a never decode value" },
+  )
 }
 
 pub fn yes_encode(_data: Yes) {

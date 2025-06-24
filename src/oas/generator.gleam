@@ -733,7 +733,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
     "gleam/dynamic/decode",
     "gleam/result",
     "gleam/bool",
-    // "gleam/option",
+    "gleam/dict",
   ]
   let operations =
     glance.Module(
