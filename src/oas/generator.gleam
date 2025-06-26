@@ -188,7 +188,7 @@ fn gen_request_for_op(
         oas.fetch_request_body(body, components.request_bodies)
       let #(known, unknown) = get_structure_json_media(content)
       case known, unknown {
-        [#(_, oas.MediaType(schema))], _ -> {
+        [#(_, oas.MediaType(Some(schema)))], _ -> {
           let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
           let #(custom_type, arg, json) = case lifted {
             lift.Named(n) -> {
@@ -390,7 +390,7 @@ fn gen_content_handling(operation_id, content, wrapper, internal) {
   let module = misc.Operations
   let #(known, unknown) = get_structure_json_media(content)
   case known, unknown {
-    [#(_, oas.MediaType(schema))], _ -> {
+    [#(_, oas.MediaType(Some(schema)))], _ -> {
       // TODO use a better schema function as this needs keeping in track for dictionaries etc
       let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
       let #(decoder, resp_type) = case lifted {

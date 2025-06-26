@@ -76,7 +76,7 @@ fn empty_response() {
 }
 
 fn just_json(schema) {
-  dict.from_list([#("application/json", oas.MediaType(schema))])
+  dict.from_list([#("application/json", oas.MediaType(Some(schema)))])
 }
 
 fn ref(schema) {
