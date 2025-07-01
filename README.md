@@ -5,7 +5,6 @@ Generate [Gleam](https://gleam.run/) clients from [Open API Specs](https://swagg
 [![Package Version](https://img.shields.io/hexpm/v/oas_generator)](https://hex.pm/packages/oas_generator)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/oas_generator/)
 
-
 ## ✨ Features
 
 - 🦄 Generates Gleam HTTP client code from OpenAPI 3.0+ specs
@@ -13,8 +12,9 @@ Generate [Gleam](https://gleam.run/) clients from [Open API Specs](https://swagg
 - 🧩 Compatible with `gleam/httpc` or `gleam/fetch` for use on front end or backend.
 - 💾 Parses JSON responses into Gleam types
 
-
 Doesn't support all uses of datatype composition for example `AnyOf` and `OneOf`.
+
+For server side generation see [this note](#server-generation)
 
 ## 🛠️ Usage
 
@@ -79,9 +79,17 @@ Further documentation can be found at <https://hexdocs.pm/oas_generator>.
 gleam test  # Run the tests
 ```
 
+## 🧑‍💻 Credit
+Created for [Spotless](https://github.com/CrowdHailer/gleam_spotless), a code first integration platform.
+
 ## 📜 Notes
+
+#### never validate
 
 Because the decoder requires a zero value, decoding of a never valid has to panic.
 
-## 🧑‍💻 Credit
-Created for [Spotless](https://github.com/CrowdHailer/gleam_spotless), a code first integration platform.
+#### Server generation
+
+I see no reason why server generation could not be added but it's not on my agenda to build a server side generator.
+
+![](./issue_1.png)
