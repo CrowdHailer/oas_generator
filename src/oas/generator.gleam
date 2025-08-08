@@ -666,10 +666,7 @@ fn run_legacy(lookup, module) {
       }
       run_legacy(next, module)
     }
-    l.Lookup(ref, _) -> {
-      echo ref
-      panic
-    }
+    l.Lookup(ref, _) -> panic as { "Unknown ref: " <> ref }
     l.Done(value) -> value
   }
 }
