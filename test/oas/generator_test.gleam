@@ -1,6 +1,7 @@
 import birdie
 import gleam/dict
 import gleam/option.{None, Some}
+import gleeunit/should
 import non_empty_list.{NonEmptyList}
 import oas
 import oas/generator as gen
@@ -58,6 +59,8 @@ fn ref(thing) {
 
 fn schema(schemas) {
   gen.gen_schema_file(dict.from_list(schemas), "myservice")
+  |> gen.run_single_location("#/components/schemas/")
+  |> should.be_ok
 }
 
 pub fn nil_alias_test() {

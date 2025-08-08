@@ -14,6 +14,7 @@ import gleam/string
 import oas
 import oas/generator/ast
 import oas/generator/lift
+import oas/generator/lookup as l
 import oas/generator/misc
 import oas/generator/schema
 import simplifile
@@ -181,8 +182,7 @@ fn gen_request_for_op(
     }
   }
 
-  let module = misc.Operations
-  let #(custom_type, body, internal) = case op.request_body {
+  use #(custom_type, body, internal) <- l.then(case op.request_body {
     Some(body) -> {
       let oas.RequestBody(content: content, ..) =
         oas.fetch_request_body(body, components.request_bodies)
@@ -190,68 +190,76 @@ fn gen_request_for_op(
       case known, unknown {
         [#(_, oas.MediaType(Some(schema)))], _ -> {
           let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
-          let #(custom_type, arg, json) = case lifted {
+          use #(custom_type, arg, json) <- l.then(case lifted {
             lift.Named(n) -> {
-              let encoder = schema.to_encoder(lift.Named(n), module)
+              use encoder <- l.then(schema.to_encoder(lift.Named(n)))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
             lift.Primitive(p) -> {
-              let encoder = schema.to_encoder(lift.Primitive(p), module)
+              use encoder <- l.then(schema.to_encoder(lift.Primitive(p)))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
             lift.Array(i) -> {
-              let encoder = schema.to_encoder(lift.Array(i), module)
+              use encoder <- l.then(schema.to_encoder(lift.Array(i)))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
             lift.Tuple(es) -> {
-              let encoder = schema.to_encoder(lift.Tuple(es), module)
+              use encoder <- l.then(schema.to_encoder(lift.Tuple(es)))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
             lift.Compound(lift.Fields(named:, additional:, required:)) -> {
               let name = ast.name_for_gleam_type(operation_id <> "-request")
-              let type_ =
-                schema.custom_type(name, named, additional, required, module)
-              #(
-                Some(type_),
-                "data",
-                schema.fields_to_encode_body(
-                  named,
-                  required,
-                  additional,
-                  module,
-                ),
-              )
+              use type_ <- l.then(schema.custom_type(
+                name,
+                named,
+                additional,
+                required,
+              ))
+              use body <- l.then(schema.fields_to_encode_body(
+                named,
+                required,
+                additional,
+              ))
+              #(Some(type_), "data", body)
+              |> l.Done
             }
             lift.Dictionary(f) -> {
-              let encoder = schema.to_encoder(lift.Dictionary(f), module)
+              use encoder <- l.then(schema.to_encoder(lift.Dictionary(f)))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
             lift.Unsupported -> {
-              let encoder = schema.to_encoder(lift.Unsupported, module)
+              use encoder <- l.then(schema.to_encoder(lift.Unsupported))
               #(None, "data", ast.call(encoder, glance.Variable("data")))
+              |> l.Done
             }
-          }
+          })
 
           #(
             custom_type,
             Some(#(arg, ast.call1("utils", "json_to_bits", json))),
             internal,
           )
+          |> l.Done
         }
         // No content
-        [], [] -> #(None, None, internal)
+        [], [] -> #(None, None, internal) |> l.Done
         [], [#(unknown, _)] -> {
           io.println("unknown content type: " <> unknown)
-          #(None, None, internal)
+          #(None, None, internal) |> l.Done
         }
         _, _ -> {
           io.println("multiple content types not supported")
-          #(None, None, internal)
+          #(None, None, internal) |> l.Done
         }
       }
     }
-    None -> #(None, None, internal)
-  }
+    None -> #(None, None, internal) |> l.Done
+  })
   let parameters_for_operation_functions =
     path_args(match)
     |> list.append(case body {
@@ -383,61 +391,71 @@ fn gen_request_for_op(
       ],
       location: glance.Span(0, 0),
     )
-  #(fn_, req_fn, custom_type, internal)
+  #(fn_, req_fn, custom_type, internal) |> l.Done
 }
 
 fn gen_content_handling(operation_id, content, wrapper, internal) {
-  let module = misc.Operations
   let #(known, unknown) = get_structure_json_media(content)
   case known, unknown {
     [#(_, oas.MediaType(Some(schema)))], _ -> {
       // TODO use a better schema function as this needs keeping in track for dictionaries etc
       let #(lifted, _nullable, internal) = lift.do_lift(schema, internal)
-      let #(decoder, resp_type) = case lifted {
-        lift.Named(n) -> #(schema.to_decoder(lift.Named(n), module), None)
-        lift.Primitive(p) -> #(
-          schema.to_decoder(lift.Primitive(p), module),
-          None,
-        )
-        lift.Array(a) -> #(schema.to_decoder(lift.Array(a), module), None)
-        lift.Tuple(of) -> #(schema.to_decoder(lift.Tuple(of), module), None)
+      use #(decoder, resp_type) <- l.then(case lifted {
+        // TODO lots of branches the same doesn't work on type narrowing
+        lift.Named(n) -> {
+          use decoder <- l.then(schema.to_decoder(lift.Named(n)))
+          #(decoder, None) |> l.Done
+        }
+        lift.Primitive(p) -> {
+          use decoder <- l.then(schema.to_decoder(lift.Primitive(p)))
+          #(decoder, None) |> l.Done
+        }
+        lift.Array(a) -> {
+          use decoder <- l.then(schema.to_decoder(lift.Array(a)))
+          #(decoder, None) |> l.Done
+        }
+        lift.Tuple(of) -> {
+          use decoder <- l.then(schema.to_decoder(lift.Tuple(of)))
+          #(decoder, None) |> l.Done
+        }
         lift.Compound(lift.Fields(parameters, additional, required)) as top -> {
           let name = operation_id <> "_response"
-          let type_ =
-            schema.custom_type(
-              name,
-              parameters,
-              additional,
-              required,
-              misc.Operations,
-            )
-          let decoder =
-            glance.Block(schema.gen_top_decoder_needs_name(name, top, module))
-          #(decoder, Some(type_))
+          use type_ <- l.then(schema.custom_type(
+            name,
+            parameters,
+            additional,
+            required,
+          ))
+          use decoder <- l.then(schema.gen_top_decoder_needs_name(name, top))
+          let decoder = glance.Block(decoder)
+          #(decoder, Some(type_)) |> l.Done
         }
-        lift.Dictionary(values) -> #(
-          schema.to_decoder(lift.Dictionary(values), module),
-          None,
-        )
-        lift.Unsupported -> #(schema.to_decoder(lift.Unsupported, module), None)
-      }
+        lift.Dictionary(values) -> {
+          use decoder <- l.then(schema.to_decoder(lift.Dictionary(values)))
+          #(decoder, None) |> l.Done
+        }
+        lift.Unsupported -> {
+          use decoder <- l.then(schema.to_decoder(lift.Unsupported))
+          #(decoder, None) |> l.Done
+        }
+      })
       let action =
         ast.call2("json", "parse_bits", glance.Variable("body"), decoder)
         |> ast.pipe(ast.call1("result", "map", glance.Variable(wrapper)))
       // True because the body is used
 
-      #(#(action, resp_type, True), internal)
+      #(#(action, resp_type, True), internal) |> l.Done
       // gen_json_content_handling(operation_id, schema, wrapper)
     }
     // No content
-    [], [] -> #(just_return_ok_nil(wrapper), internal)
+    [], [] -> #(just_return_ok_nil(wrapper), internal) |> l.Done
     [], [#(unknown, _)] -> {
       io.println("unknown content type: " <> unknown)
-      #(just_return_ok_nil(wrapper), internal)
+      #(just_return_ok_nil(wrapper), internal) |> l.Done
     }
     _, _ -> {
       io.println("multiple content types not supported")
-      #(just_return_ok_nil(wrapper), internal)
+      #(just_return_ok_nil(wrapper), internal) |> l.Done
     }
   }
 }
@@ -473,7 +491,7 @@ fn gen_response(operation, components: oas.Components, internal) {
         _ -> Error(Nil)
       }
     })
-  let #(#(default_branch, resp_type, used), internal) = case default {
+  use #(#(default_branch, resp_type, used), internal) <- l.then(case default {
     Ok(response) -> {
       let oas.Response(content: content, ..) =
         oas.fetch_response(response, components.responses)
@@ -507,7 +525,7 @@ fn gen_response(operation, components: oas.Components, internal) {
                 |> ast.pipe(glance.Variable("Error"))
                 |> ast.pipe(glance.Variable("Ok"))
 
-              #(#(branch, None, False), internal)
+              #(#(branch, None, False), internal) |> l.Done
             }
           }
         }
@@ -517,39 +535,45 @@ fn gen_response(operation, components: oas.Components, internal) {
             |> ast.pipe(glance.Variable("Error"))
             |> ast.pipe(glance.Variable("Ok"))
 
-          #(#(branch, None, False), internal)
+          #(#(branch, None, False), internal) |> l.Done
         }
       }
     }
-  }
+  })
   let default_clause =
     glance.Clause([[glance.PatternDiscard("")]], None, default_branch)
-  let #(#(used, response_type, expected_clauses), internal) = case
-    status_range(responses, 200, 300)
-    |> list.sort(fn(ra, rb) { int.compare(ra.0, rb.0) })
-  {
-    [] -> #(#(used, resp_type, []), internal)
-    [#(status, first), ..more] -> {
-      case more {
-        [] -> Nil
-        _ -> {
-          io.print("Doesn't support multiple ok statuses")
-          Nil
+  use #(#(used, response_type, expected_clauses), internal) <- l.then(
+    case
+      status_range(responses, 200, 300)
+      |> list.sort(fn(ra, rb) { int.compare(ra.0, rb.0) })
+    {
+      [] -> #(#(used, resp_type, []), internal) |> l.Done
+      [#(status, first), ..more] -> {
+        case more {
+          [] -> Nil
+          _ -> {
+            io.print("Doesn't support multiple ok statuses")
+            Nil
+          }
         }
+        let oas.Response(content: content, ..) =
+          oas.fetch_response(first, components.responses)
+        use #(#(branch, resp_type, u), internal) <- l.then(gen_content_handling(
+          op.operation_id,
+          content,
+          "Ok",
+          internal,
+        ))
+        let clause =
+          glance.Clause(
+            [[glance.PatternInt(int.to_string(status))]],
+            None,
+            branch,
+          )
+        #(#(used || u, resp_type, [clause]), internal) |> l.Done
       }
-      let oas.Response(content: content, ..) =
-        oas.fetch_response(first, components.responses)
-      let #(#(branch, resp_type, u), internal) =
-        gen_content_handling(op.operation_id, content, "Ok", internal)
-      let clause =
-        glance.Clause(
-          [[glance.PatternInt(int.to_string(status))]],
-          None,
-          branch,
-        )
-      #(#(used || u, resp_type, [clause]), internal)
-    }
-  }
+    },
+  )
 
   let response_handler =
     glance.Function(
@@ -585,7 +609,7 @@ fn gen_response(operation, components: oas.Components, internal) {
       ],
       location: glance.Span(0, 0),
     )
-  #(#(response_handler, response_type), internal)
+  #(#(response_handler, response_type), internal) |> l.Done
 }
 
 // This returns functions for the top level and operations file
@@ -595,22 +619,31 @@ fn gen_fns(key, path_item: oas.PathItem, components, exclude, acc) {
       !list.contains(exclude, { op.1 }.operation_id)
     })
 
-  list.map_fold(operations, acc, fn(acc, op) {
+  l.map_fold(operations, acc, fn(acc, op) {
     let #(custom_types, internal) = acc
-    let #(fn_, req_fn, custom_type, internal) =
-      gen_request_for_op(op, key, path_item.parameters, components, internal)
+    use #(fn_, req_fn, custom_type, internal) <- l.then(gen_request_for_op(
+      op,
+      key,
+      path_item.parameters,
+      components,
+      internal,
+    ))
     let custom_types = case custom_type {
       Some(t) -> [t, ..custom_types]
       None -> custom_types
     }
 
-    let #(#(response_handler, response_type), internal) =
-      gen_response(op, components, internal)
+    use #(#(response_handler, response_type), internal) <- l.then(gen_response(
+      op,
+      components,
+      internal,
+    ))
 
     #(#(custom_types, internal), #(
       #([response_handler, req_fn], response_type),
       fn_,
     ))
+    |> l.Done
   })
 }
 
@@ -622,6 +655,37 @@ fn gen_operations(op, components, exclude, acc) {
 
 fn defs(xs) {
   list.map(xs, glance.Definition([], _))
+}
+
+fn run_legacy(lookup, module) {
+  case lookup {
+    l.Lookup("#/components/schemas/" <> inner, resume) -> {
+      let next = case module {
+        misc.Schema -> resume(None, inner)
+        misc.Operations -> resume(Some("schema"), inner)
+      }
+      run_legacy(next, module)
+    }
+    l.Lookup(ref, _) -> {
+      echo ref
+      panic
+    }
+    l.Done(value) -> value
+  }
+}
+
+pub fn run_single_location(lookup, prefix) {
+  case lookup {
+    l.Lookup(ref, resume) ->
+      case string.split_once(ref, prefix) {
+        Ok(#("", inner)) ->
+          resume(None, inner)
+          |> run_single_location(prefix)
+        _ -> Error("Unknown ref: " <> ref)
+      }
+
+    l.Done(value) -> Ok(value)
+  }
 }
 
 pub fn build(spec_src, project_path, provider, exclude) {
@@ -673,6 +737,7 @@ pub fn build(spec_src, project_path, provider, exclude) {
 
   let content =
     gen_schema_file(spec.components.schemas, provider)
+    |> run_legacy(misc.Schema)
     |> bit_array.from_string()
 
   let schema_module_file = module_path <> "/schema.gleam"
@@ -690,28 +755,40 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let custom_types = []
   let internal = []
   let #(#(custom_types, internal), fs) =
-    list.map_fold(paths, #(custom_types, internal), fn(acc, path) {
-      gen_operations(path, spec.components, exclude, acc)
-    })
-  let #(internal_types, internal_fns) =
-    list.index_map(internal, fn(fields, index) {
-      let lift.Fields(properties, additional, required) = fields
-      let name = "Internal_" <> int.to_string(index)
-      // TODO use a better schema function as this needs keeping in track for dictionaries etc
-      let module = misc.Operations
-      let type_ =
-        schema.custom_type(
-          name,
-          properties,
-          additional,
-          required,
-          misc.Operations,
-        )
+    run_legacy(
+      l.map_fold(paths, #(custom_types, internal), fn(acc, path) {
+        gen_operations(path, spec.components, exclude, acc)
+      }),
+      misc.Operations,
+    )
 
-      let encoder = schema.to_encode_fn(#(name, lift.Compound(fields)), module)
-      let decoder = schema.to_decode_fn(#(name, lift.Compound(fields)), module)
-      #(type_, [encoder, decoder])
-    })
+  let zipped =
+    run_legacy(
+      l.seq(
+        list.index_map(internal, fn(fields, index) {
+          let lift.Fields(properties, additional, required) = fields
+          let name = "Internal_" <> int.to_string(index)
+          // TODO use a better schema function as this needs keeping in track for dictionaries etc
+          use type_ <- l.then(schema.custom_type(
+            name,
+            properties,
+            additional,
+            required,
+          ))
+
+          use encoder <- l.then(
+            schema.to_encode_fn(#(name, lift.Compound(fields))),
+          )
+          use decoder <- l.then(
+            schema.to_decode_fn(#(name, lift.Compound(fields))),
+          )
+          #(type_, [encoder, decoder]) |> l.Done
+        }),
+      ),
+      misc.Operations,
+    )
+  let #(internal_types, internal_fns) =
+    zipped
     |> list.unzip
 
   let #(operation_functions, top) = list.unzip(list.flatten(fs))
@@ -763,7 +840,9 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
 }
 
 pub fn gen_schema_file(schemas, provider) {
-  let #(custom_types, type_aliases, functions) = schema.generate(schemas)
+  use #(custom_types, type_aliases, functions) <- l.then(schema.generate(
+    schemas,
+  ))
 
   glance.Module(
     [
@@ -788,6 +867,7 @@ pub fn gen_schema_file(schemas, provider) {
     defs(functions),
   )
   |> glance_printer.print
+  |> l.Done
 }
 
 pub fn json_decode_error_to_string(error: json.DecodeError) -> String {
