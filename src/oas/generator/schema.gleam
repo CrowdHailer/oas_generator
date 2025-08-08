@@ -129,7 +129,7 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
         lift.Number -> glance.NamedType("Float", None, [])
         lift.String -> glance.NamedType("String", None, [])
         lift.Null -> glance.NamedType("Nil", None, [])
-        lift.Always -> glance.NamedType("Json", Some("json"), [])
+        lift.Always -> glance.NamedType("Any", Some("utils"), [])
         lift.Never -> glance.NamedType("Never", Some("utils"), [])
       }
       |> l.Done
@@ -155,7 +155,7 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
         ]),
       )
     }
-    lift.Unsupported -> l.Done(glance.NamedType("Json", Some("json"), []))
+    lift.Unsupported -> l.Done(glance.NamedType("Any", Some("utils"), []))
   }
 }
 
@@ -172,7 +172,6 @@ pub fn to_encode_fn(entry) {
       glance.Call(top, [glance.UnlabelledField(arg)]) |> l.Done
     }
     lift.Primitive(lift.Null) -> ast.call0("json", "null") |> l.Done
-    lift.Primitive(lift.Always) -> arg |> l.Done
     lift.Primitive(lift.Never) ->
       glance.Panic(Some(glance.String("never value cannot be encoded")))
       |> l.Done
@@ -192,7 +191,10 @@ pub fn to_encode_fn(entry) {
       use values <- l.then(to_encoder(values))
       ast.call2("utils", "dict", arg, values) |> l.Done
     }
-    lift.Unsupported -> arg |> l.Done
+    lift.Unsupported -> {
+      use top <- l.then(to_encoder(lift.Unsupported))
+      glance.Call(top, [glance.UnlabelledField(arg)]) |> l.Done
+    }
   })
 
   let ignored = case top {
@@ -302,11 +304,7 @@ pub fn to_encoder(lifted) -> l.Lookup(glance.Expression) {
         [glance.Expression(ast.call0("json", "null"))],
       )
       |> l.Done
-    lift.Primitive(lift.Always) ->
-      glance.Fn([glance.FnParameter(glance.Named("data"), None)], None, [
-        glance.Expression(glance.Variable("data")),
-      ])
-      |> l.Done
+    lift.Primitive(lift.Always) -> ast.access("utils", "any_to_json") |> l.Done
     lift.Primitive(lift.Never) ->
       glance.Fn([glance.FnParameter(glance.Discarded("data"), None)], None, [
         glance.Expression(
@@ -337,11 +335,7 @@ pub fn to_encoder(lifted) -> l.Lookup(glance.Expression) {
       ])
       |> l.Done
     }
-    lift.Unsupported ->
-      glance.Fn([glance.FnParameter(glance.Named("data"), None)], None, [
-        glance.Expression(glance.Variable("data")),
-      ])
-      |> l.Done
+    lift.Unsupported -> ast.access("utils", "any_to_json") |> l.Done
   }
 }
 
@@ -517,7 +511,7 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
         lift.Number -> ast.access("decode", "float")
         lift.String -> ast.access("decode", "string")
         lift.Null -> always_decode()
-        lift.Always -> ast.call0("utils", "dynamic_to_json")
+        lift.Always -> ast.call0("utils", "any_decoder")
         lift.Never -> never_decode()
       }
       |> l.Done
@@ -559,7 +553,7 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
       ast.call2("decode", "dict", ast.access("decode", "string"), values)
       |> l.Done
     }
-    lift.Unsupported -> ast.call0("utils", "dynamic_to_json") |> l.Done
+    lift.Unsupported -> ast.call0("utils", "any_decoder") |> l.Done
   }
 }
 

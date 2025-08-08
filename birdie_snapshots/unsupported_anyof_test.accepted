@@ -5,19 +5,19 @@ file: ./test/oas/generator_test.gleam
 test_name: unsupported_anyof_test
 ---
 import gleam/option.{type Option, None}
-import myservice/utils
+import oas/generator/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/dict
 
 pub type Box =
-  json.Json
+  utils.Any
 
 pub fn box_decoder() {
-  utils.dynamic_to_json()
+  utils.any_decoder()
 }
 
 pub fn box_encode(data: Box) {
-  data
+  utils.any_to_json(data)
 }

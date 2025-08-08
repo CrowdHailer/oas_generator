@@ -24,6 +24,11 @@ Install as a dev dependency.
 gleam add --dev oas_generator@1
 ```
 
+Add the utils dependency (not a dev dependency).
+```sh
+gleam add oas_generator_utils@1
+```
+
 Fetch the JSON version of your API specification.
 
 An example for a petstore is available [here](https://petstore3.swagger.io/api/v3/openapi.json)

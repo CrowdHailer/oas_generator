@@ -736,7 +736,7 @@ pub fn build(spec_src, project_path, provider, exclude) {
   )
 
   let content =
-    gen_schema_file(spec.components.schemas, provider)
+    gen_schema_file(spec.components.schemas)
     |> run_legacy(misc.Schema)
     |> bit_array.from_string()
 
@@ -800,7 +800,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let operation_functions = list.flatten(operation_functions)
 
   let modules = [
-    provider <> "/utils",
+    "oas/generator/utils",
     provider <> "/schema",
     "gleam/http",
     "gleam/http/response",
@@ -839,7 +839,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   #(operations, entry)
 }
 
-pub fn gen_schema_file(schemas, provider) {
+pub fn gen_schema_file(schemas) {
   use #(custom_types, type_aliases, functions) <- l.then(schema.generate(
     schemas,
   ))
@@ -850,7 +850,7 @@ pub fn gen_schema_file(schemas, provider) {
       glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
       glance.Definition([], glance.Import("gleam/dynamic", None, [], [])),
       glance.Definition([], glance.Import("gleam/json", None, [], [])),
-      glance.Definition([], glance.Import(provider <> "/utils", None, [], [])),
+      glance.Definition([], glance.Import("oas/generator/utils", None, [], [])),
       glance.Definition(
         [],
         glance.Import(

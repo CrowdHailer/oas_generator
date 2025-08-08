@@ -29,7 +29,7 @@ pub fn get_users_request(base) {
 pub fn get_users_response(response) {
   let response.Response(status:, body:, ..) = response
   case status {
-    200 -> json.parse_bits(body, utils.dynamic_to_json()) |> result.map(Ok)
+    200 -> json.parse_bits(body, utils.any_decoder()) |> result.map(Ok)
     _ -> response |> Error |> Ok
   }
 }

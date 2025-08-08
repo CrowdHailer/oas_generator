@@ -18,7 +18,7 @@ import myservice/utils
 import gleam/option.{type Option, None}
 
 pub type GetUsersResponse {
-  GetUsersResponse(meta: json.Json)
+  GetUsersResponse(meta: utils.Any)
 }
 
 pub fn get_users_request(base) {
@@ -34,7 +34,7 @@ pub fn get_users_response(response) {
   let response.Response(status:, body:, ..) = response
   case status {
     200 -> json.parse_bits(body, {
-        use meta <- decode.field("meta", utils.dynamic_to_json())
+        use meta <- decode.field("meta", utils.any_decoder())
         decode.success(GetUsersResponse(meta: meta))
       }) |> result.map(Ok)
     _ -> response |> Error |> Ok

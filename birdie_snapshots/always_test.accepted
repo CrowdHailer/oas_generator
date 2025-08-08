@@ -5,19 +5,19 @@ file: ./test/oas/generator_test.gleam
 test_name: always_test
 ---
 import gleam/option.{type Option, None}
-import myservice/utils
+import oas/generator/utils
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/dict
 
 pub type Yes =
-  json.Json
+  utils.Any
 
 pub fn yes_decoder() {
-  utils.dynamic_to_json()
+  utils.any_decoder()
 }
 
 pub fn yes_encode(data: Yes) {
-  data
+  utils.any_to_json(data)
 }

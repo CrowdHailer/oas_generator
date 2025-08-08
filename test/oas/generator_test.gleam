@@ -58,7 +58,7 @@ fn ref(thing) {
 }
 
 fn schema(schemas) {
-  gen.gen_schema_file(dict.from_list(schemas), "myservice")
+  gen.gen_schema_file(dict.from_list(schemas))
   |> gen.run_single_location("#/components/schemas/")
   |> should.be_ok
 }
