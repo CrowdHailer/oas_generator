@@ -14,7 +14,7 @@ import gleam/int
 import gleam/http/response
 import gleam/http
 import myservice/schema
-import myservice/utils
+import oas/generator/utils
 import gleam/option.{type Option, None}
 
 pub fn set_params_request(base, data) {
