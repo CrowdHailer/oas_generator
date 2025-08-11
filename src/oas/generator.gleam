@@ -17,6 +17,7 @@ import oas/generator/lift
 import oas/generator/lookup as l
 import oas/generator/misc
 import oas/generator/schema
+import oas/json_schema
 import simplifile
 import snag
 
@@ -28,7 +29,7 @@ fn concat_path(match, root) {
         oas.FixedSegment(s) -> #(current <> "/" <> s, prev)
         oas.MatchSegment(name, schema) -> {
           case schema {
-            oas.String(..) -> {
+            json_schema.String(..) -> {
               let prev = [glance.String(current <> "/"), ..prev]
               let prev = [
                 glance.Variable(ast.name_for_gleam_field_or_var(name)),
@@ -36,7 +37,7 @@ fn concat_path(match, root) {
               ]
               #("", prev)
             }
-            oas.Integer(..) -> {
+            json_schema.Integer(..) -> {
               let prev = [glance.String(current <> "/"), ..prev]
               let prev = [
                 ast.call1(
@@ -86,10 +87,10 @@ fn query_to_parts(parameters, components: oas.Components) {
     let var = glance.Variable(key)
 
     let mapper = case schema {
-      oas.Boolean(..) -> Some(ast.access("bool", "to_string"))
-      oas.Integer(..) -> Some(ast.access("int", "to_string"))
-      oas.Number(..) -> Some(ast.access("float", "to_string"))
-      oas.String(..) -> None
+      json_schema.Boolean(..) -> Some(ast.access("bool", "to_string"))
+      json_schema.Integer(..) -> Some(ast.access("int", "to_string"))
+      json_schema.Number(..) -> Some(ast.access("float", "to_string"))
+      json_schema.String(..) -> None
       _ -> Some(noop1("query parameter is not supported"))
     }
     let value = case required {
@@ -504,10 +505,11 @@ fn gen_response(operation, components: oas.Components, internal) {
             list.try_fold(rest, [status], fn(acc, this) {
               let #(status, this) = this
               case first, this {
-                oas.Ref(ref: a, ..), oas.Ref(ref: b, ..) if a == b ->
-                  Ok([status, ..acc])
-                oas.Inline(oas.Response(content: a, ..)),
-                  oas.Inline(oas.Response(content: b, ..))
+                json_schema.Ref(ref: a, ..), json_schema.Ref(ref: b, ..)
+                  if a == b
+                -> Ok([status, ..acc])
+                json_schema.Inline(oas.Response(content: a, ..)),
+                  json_schema.Inline(oas.Response(content: b, ..))
                   if a == b
                 -> Ok([status, ..acc])
                 _, _ -> Error(Nil)

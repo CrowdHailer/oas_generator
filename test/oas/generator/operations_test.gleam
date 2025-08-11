@@ -4,10 +4,20 @@ import gleam/http
 import gleam/option.{None, Some}
 import oas
 import oas/generator as gen
+import oas/json_schema
 
-const just_string = oas.String(None, None, None, None, False, None, None, False)
+const just_string = json_schema.String(
+  None,
+  None,
+  None,
+  None,
+  False,
+  None,
+  None,
+  False,
+)
 
-const just_integer = oas.Integer(
+const just_integer = json_schema.Integer(
   None,
   None,
   None,
@@ -20,11 +30,11 @@ const just_integer = oas.Integer(
 )
 
 fn array(items) {
-  oas.Array(None, None, False, items, False, None, None, False)
+  json_schema.Array(None, None, False, items, False, None, None, False)
 }
 
 fn object(params, required) {
-  oas.Object(
+  json_schema.Object(
     dict.from_list(params),
     required,
     None,
@@ -38,7 +48,17 @@ fn object(params, required) {
 }
 
 fn dict(of) {
-  oas.Object(dict.new(), [], Some(of), None, 0, False, None, None, False)
+  json_schema.Object(
+    dict.new(),
+    [],
+    Some(of),
+    None,
+    0,
+    False,
+    None,
+    None,
+    False,
+  )
 }
 
 const no_info = oas.Info("title", None, None, None, None, None, "3.1.0")
@@ -68,11 +88,11 @@ fn path(p, items) {
 }
 
 fn json_response(schema) {
-  oas.Inline(oas.Response(None, dict.new(), just_json(schema)))
+  json_schema.Inline(oas.Response(None, dict.new(), just_json(schema)))
 }
 
 fn empty_response() {
-  oas.Inline(oas.Response(None, dict.new(), dict.new()))
+  json_schema.Inline(oas.Response(None, dict.new(), dict.new()))
 }
 
 fn just_json(schema) {
@@ -80,7 +100,7 @@ fn just_json(schema) {
 }
 
 fn ref(schema) {
-  oas.Ref("#/components/schemas/" <> schema, None, None)
+  json_schema.Ref("#/components/schemas/" <> schema, None, None)
 }
 
 pub fn single_response_test() {
@@ -105,9 +125,9 @@ pub fn just_string_request_test() {
         post(
           "upload-number",
           [],
-          oas.Inline(oas.RequestBody(
+          json_schema.Inline(oas.RequestBody(
             None,
-            just_json(oas.Inline(just_integer)),
+            just_json(json_schema.Inline(just_integer)),
             True,
           )),
           [#(oas.Status(204), empty_response())],
@@ -129,16 +149,16 @@ pub fn object_request_test() {
         post(
           "set_params",
           [],
-          oas.Inline(oas.RequestBody(
+          json_schema.Inline(oas.RequestBody(
             None,
             just_json(
-              oas.Inline(
+              json_schema.Inline(
                 object(
                   [
-                    #("size", oas.Inline(just_integer)),
+                    #("size", json_schema.Inline(just_integer)),
                     #(
                       "shape",
-                      oas.Ref("#/components/schemas/Shape", None, None),
+                      json_schema.Ref("#/components/schemas/Shape", None, None),
                     ),
                   ],
                   [],
@@ -166,18 +186,22 @@ pub fn nested_object_request_test() {
         post(
           "set_params",
           [],
-          oas.Inline(oas.RequestBody(
+          json_schema.Inline(oas.RequestBody(
             None,
             just_json(
-              oas.Inline(
+              json_schema.Inline(
                 array(
-                  oas.Inline(
+                  json_schema.Inline(
                     object(
                       [
-                        #("id", oas.Inline(just_integer)),
+                        #("id", json_schema.Inline(just_integer)),
                         #(
                           "flavour",
-                          oas.Ref("#/components/schemas/Flavour", None, None),
+                          json_schema.Ref(
+                            "#/components/schemas/Flavour",
+                            None,
+                            None,
+                          ),
                         ),
                       ],
                       ["id", "flavour"],
@@ -207,9 +231,11 @@ pub fn dictionary_request_test() {
         post(
           "set_params",
           [],
-          oas.Inline(oas.RequestBody(
+          json_schema.Inline(oas.RequestBody(
             None,
-            just_json(oas.Inline(dict(oas.Inline(just_integer)))),
+            just_json(
+              json_schema.Inline(dict(json_schema.Inline(just_integer))),
+            ),
             True,
           )),
           [#(oas.Status(204), empty_response())],
@@ -231,9 +257,9 @@ pub fn request_body_named_test() {
         post(
           "set_params",
           [],
-          oas.Inline(oas.RequestBody(
+          json_schema.Inline(oas.RequestBody(
             None,
-            just_json(oas.Ref("#/components/schemas/params", None, None)),
+            just_json(json_schema.Ref("#/components/schemas/params", None, None)),
             True,
           )),
           [],
@@ -256,10 +282,13 @@ pub fn single_inline_object_response_test() {
           #(
             oas.Status(200),
             json_response(
-              oas.Inline(
+              json_schema.Inline(
                 object(
                   [
-                    #("items", oas.Inline(array(oas.Inline(just_string)))),
+                    #(
+                      "items",
+                      json_schema.Inline(array(json_schema.Inline(just_string))),
+                    ),
                     #("thing", ref("thing")),
                   ],
                   ["items"],
@@ -286,13 +315,15 @@ pub fn nested_object_in_response_test() {
           #(
             oas.Status(200),
             json_response(
-              oas.Inline(
+              json_schema.Inline(
                 object(
                   [
                     #(
                       "metadata",
-                      oas.Inline(
-                        object([#("param", oas.Inline(just_string))], ["param"]),
+                      json_schema.Inline(
+                        object([#("param", json_schema.Inline(just_string))], [
+                          "param",
+                        ]),
                       ),
                     ),
                   ],
@@ -319,11 +350,11 @@ pub fn array_parameters_response_test() {
         get(
           "get_users",
           [
-            oas.Inline(oas.QueryParameter(
+            json_schema.Inline(oas.QueryParameter(
               "tags",
               None,
               False,
-              oas.Inline(array(oas.Inline(just_string))),
+              json_schema.Inline(array(json_schema.Inline(just_string))),
             )),
           ],
           [#(oas.Status(200), json_response(ref("account")))],
@@ -380,7 +411,10 @@ pub fn alway_pass_test() {
     dict.from_list([
       path("/users", [
         get("get_users", [], [
-          #(oas.Status(200), json_response(oas.Inline(oas.AlwaysPasses))),
+          #(
+            oas.Status(200),
+            json_response(json_schema.Inline(json_schema.AlwaysPasses)),
+          ),
         ]),
       ]),
     ])
@@ -400,8 +434,13 @@ pub fn alway_field_pass_test() {
           #(
             oas.Status(200),
             json_response(
-              oas.Inline(
-                object([#("meta", oas.Inline(oas.AlwaysPasses))], ["meta"]),
+              json_schema.Inline(
+                object(
+                  [#("meta", json_schema.Inline(json_schema.AlwaysPasses))],
+                  [
+                    "meta",
+                  ],
+                ),
               ),
             ),
           ),

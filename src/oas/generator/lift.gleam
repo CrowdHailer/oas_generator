@@ -2,7 +2,7 @@ import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import non_empty_list.{NonEmptyList}
-import oas
+import oas/json_schema
 
 pub type Schema(t) {
   Named(String)
@@ -92,20 +92,28 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
 // nullable is ignored at the moment
 pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
   case schema {
-    oas.Ref(ref:, ..) -> #(Named(ref), False, acc)
-    oas.Inline(schema) ->
+    json_schema.Ref(ref:, ..) -> #(Named(ref), False, acc)
+    json_schema.Inline(schema) ->
       case schema {
-        oas.Boolean(nullable:, ..) -> #(Primitive(Boolean), nullable, acc)
-        oas.Integer(nullable:, ..) -> #(Primitive(Integer), nullable, acc)
-        oas.Number(nullable:, ..) -> #(Primitive(Number), nullable, acc)
-        oas.String(nullable:, ..) -> #(Primitive(String), nullable, acc)
-        oas.Null(..) -> #(Primitive(Null), False, acc)
-        oas.Array(nullable:, items:, ..) -> {
+        json_schema.Boolean(nullable:, ..) -> #(
+          Primitive(Boolean),
+          nullable,
+          acc,
+        )
+        json_schema.Integer(nullable:, ..) -> #(
+          Primitive(Integer),
+          nullable,
+          acc,
+        )
+        json_schema.Number(nullable:, ..) -> #(Primitive(Number), nullable, acc)
+        json_schema.String(nullable:, ..) -> #(Primitive(String), nullable, acc)
+        json_schema.Null(..) -> #(Primitive(Null), False, acc)
+        json_schema.Array(nullable:, items:, ..) -> {
           let #(top, _, acc) = do_lift(items, acc)
           let #(schema, acc) = not_top(top, acc)
           #(Array(schema), nullable, acc)
         }
-        oas.Object(
+        json_schema.Object(
           nullable:,
           properties:,
           required:,
@@ -133,7 +141,10 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
                   },
                 )
               let #(additional, acc) = case additional_properties {
-                None | Some(oas.Inline(oas.AlwaysFails)) -> #(None, acc)
+                None | Some(json_schema.Inline(json_schema.AlwaysFails)) -> #(
+                  None,
+                  acc,
+                )
                 Some(values) -> {
                   let #(top, _, acc) = do_lift(values, acc)
                   let #(schema, acc) = not_top(top, acc)
@@ -148,8 +159,8 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
             }
           }
         }
-        oas.AllOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        oas.AllOf(items) -> {
+        json_schema.AllOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        json_schema.AllOf(items) -> {
           let #(acc, items) =
             list.map_fold(items |> non_empty_list.to_list, acc, fn(acc, item) {
               let #(top, _, acc) = do_lift(item, acc)
@@ -158,12 +169,16 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
             })
           #(Tuple(items), False, acc)
         }
-        oas.AnyOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        oas.OneOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        oas.AnyOf(..) | oas.OneOf(..) -> #(Unsupported, False, acc)
-
-        oas.AlwaysPasses(..) -> #(Primitive(Always), False, acc)
-        oas.AlwaysFails(..) -> #(Primitive(Never), False, acc)
+        json_schema.AnyOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        json_schema.OneOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        json_schema.AnyOf(..) | json_schema.OneOf(..) -> #(
+          Unsupported,
+          False,
+          acc,
+        )
+        json_schema.Enum(..) -> #(Unsupported, False, acc)
+        json_schema.AlwaysPasses(..) -> #(Primitive(Always), False, acc)
+        json_schema.AlwaysFails(..) -> #(Primitive(Never), False, acc)
       }
   }
 }

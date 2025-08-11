@@ -6,17 +6,17 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
-import oas
 import oas/generator/ast
 import oas/generator/lift
 import oas/generator/lookup as l
+import oas/json_schema
 
 /// From a dictionary of schemas generate all custom types, type aliases, encoders and decoders. 
 pub fn generate(schemas) {
   let #(internal, named) =
     list.map_fold(schemas |> dict.to_list, [], fn(acc, entry) {
       let #(name, schema) = entry
-      let #(top, _nullable, acc) = lift.do_lift(oas.Inline(schema), acc)
+      let #(top, _nullable, acc) = lift.do_lift(json_schema.Inline(schema), acc)
       #(acc, #(name, top))
     })
   let named =
