@@ -272,3 +272,10 @@ pub fn unsupported_anyof_test() {
   ])
   |> birdie.snap(title: "unsupported_anyof_test")
 }
+
+pub fn enum_of_strings_test() {
+  schema([
+    #("Box", json_schema.enum_of_strings(NonEmptyList("a", ["b", "c"]))),
+  ])
+  |> birdie.snap(title: "enum_of_strings_test")
+}

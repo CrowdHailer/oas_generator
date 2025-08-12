@@ -2,6 +2,7 @@ import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import non_empty_list.{NonEmptyList}
+import oas/generator/utils
 import oas/json_schema
 
 pub type Schema(t) {
@@ -176,9 +177,83 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
           False,
           acc,
         )
-        json_schema.Enum(..) -> #(Unsupported, False, acc)
+        // OAS generator doesn't support any validation beyond types
+        json_schema.Enum(items) -> {
+          let NonEmptyList(first, rest) = items
+          case first {
+            utils.Boolean(_value) ->
+              case all_map(rest, boolean_value) {
+                Ok(_rest) -> #(Primitive(Boolean), False, acc)
+                Error(Nil) -> #(Unsupported, False, acc)
+              }
+            utils.Integer(_value) ->
+              case all_map(rest, integer_value) {
+                Ok(_rest) -> #(Primitive(Integer), False, acc)
+                Error(Nil) -> #(Unsupported, False, acc)
+              }
+            utils.Number(_value) ->
+              case all_map(rest, number_value) {
+                Ok(_rest) -> #(Primitive(Number), False, acc)
+                Error(Nil) -> #(Unsupported, False, acc)
+              }
+            utils.String(_value) ->
+              case all_map(rest, string_value) {
+                Ok(_rest) -> #(Primitive(String), False, acc)
+                Error(Nil) -> #(Unsupported, False, acc)
+              }
+            utils.Null ->
+              case rest {
+                [] -> #(Primitive(Null), False, acc)
+                _ -> #(Unsupported, False, acc)
+              }
+            _ -> #(Unsupported, False, acc)
+          }
+        }
         json_schema.AlwaysPasses(..) -> #(Primitive(Always), False, acc)
         json_schema.AlwaysFails(..) -> #(Primitive(Never), False, acc)
       }
+  }
+}
+
+fn all_map(items, func) {
+  do_all_map(items, func, [])
+}
+
+fn do_all_map(items, func, acc) {
+  case items {
+    [] -> Ok(list.reverse(acc))
+    [item, ..rest] ->
+      case func(item) {
+        Ok(mapped) -> do_all_map(rest, func, [mapped, ..acc])
+        Error(reason) -> Error(reason)
+      }
+  }
+}
+
+fn boolean_value(any) {
+  case any {
+    utils.Boolean(value) -> Ok(value)
+    _ -> Error(Nil)
+  }
+}
+
+fn integer_value(any) {
+  case any {
+    utils.Integer(value) -> Ok(value)
+    _ -> Error(Nil)
+  }
+}
+
+fn number_value(any) {
+  case any {
+    utils.Number(value) -> Ok(value)
+    _ -> Error(Nil)
+  }
+}
+
+fn string_value(any) {
+  case any {
+    utils.String(value) -> Ok(value)
+    _ -> Error(Nil)
   }
 }

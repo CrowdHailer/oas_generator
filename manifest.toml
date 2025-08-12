@@ -40,5 +40,6 @@ gleeunit = { version = ">= 1.0.0 and < 1.4.0" }
 justin = { version = ">= 1.0.1 and < 2.0.0" }
 non_empty_list = { version = ">= 2.1.0 and < 3.0.0" }
 oas = { version = ">= 7.1.0 and < 8.0.0" }
+oas_generator_utils = { version = ">= 1.0.0 and < 2.0.0" }
 simplifile = { version = ">= 2.2.1 and < 3.0.0" }
 snag = { version = ">= 1.1.0 and < 2.0.0" }
