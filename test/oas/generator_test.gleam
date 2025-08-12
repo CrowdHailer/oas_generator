@@ -6,17 +6,6 @@ import non_empty_list.{NonEmptyList}
 import oas/generator as gen
 import oas/json_schema
 
-const just_string = json_schema.String(
-  None,
-  None,
-  None,
-  None,
-  False,
-  None,
-  None,
-  False,
-)
-
 const nullable_string = json_schema.String(
   None,
   None,
@@ -27,22 +16,6 @@ const nullable_string = json_schema.String(
   None,
   False,
 )
-
-const just_integer = json_schema.Integer(
-  None,
-  None,
-  None,
-  None,
-  None,
-  False,
-  None,
-  None,
-  False,
-)
-
-fn array(items) {
-  json_schema.Array(None, None, False, items, False, None, None, False)
-}
 
 fn object(params, required) {
   json_schema.Object(
@@ -89,7 +62,7 @@ pub fn nil_alias_test() {
 
 // Simple things don't become new custom types
 pub fn simple_string_schema_test() {
-  schema([#("my_string", just_string)])
+  schema([#("my_string", json_schema.string())])
   |> birdie.snap(title: "simple string schema test")
 }
 
@@ -104,12 +77,14 @@ pub fn never_test() {
 }
 
 // pub fn simple_nullable_schema_test() {
-//   schema([#("my_string", just_string)])
+//   schema([#("my_string", json_schema.string())])
 //   |> birdie.snap(title: "simple_nullable_schema_test")
 // }
 
 pub fn array_of_primitive_test() {
-  schema([#("my_array", array(json_schema.Inline(just_integer)))])
+  schema([
+    #("my_array", json_schema.array(json_schema.Inline(json_schema.integer()))),
+  ])
   |> birdie.snap(title: "array_of_primitive_test")
 }
 
@@ -117,21 +92,25 @@ pub fn nested_array_of_primitive_test() {
   schema([
     #(
       "my_array",
-      array(json_schema.Inline(array(json_schema.Inline(just_integer)))),
+      json_schema.array(
+        json_schema.Inline(
+          json_schema.array(json_schema.Inline(json_schema.integer())),
+        ),
+      ),
     ),
   ])
   |> birdie.snap(title: "nested_array_of_primitive_test")
 }
 
 pub fn array_of_references_test() {
-  schema([#("my_array", array(ref("totals")))])
+  schema([#("my_array", json_schema.array(ref("totals")))])
   |> birdie.snap(title: "array_of_references_test")
 }
 
 pub fn inline_object_schema_test() {
   let parameters = [
-    #("name", json_schema.Inline(just_string)),
-    #("age", json_schema.Inline(just_integer)),
+    #("name", json_schema.Inline(json_schema.string())),
+    #("age", json_schema.Inline(json_schema.integer())),
     #(
       "active",
       json_schema.Inline(json_schema.Boolean(False, None, None, False)),
@@ -142,7 +121,7 @@ pub fn inline_object_schema_test() {
 }
 
 pub fn required_fields_test() {
-  let parameters = [#("name", json_schema.Inline(just_string))]
+  let parameters = [#("name", json_schema.Inline(json_schema.string()))]
   schema([#("user", object(parameters, ["name"]))])
   |> birdie.snap(title: "required_fields_test")
 }
@@ -155,7 +134,7 @@ pub fn nullable_fields_test() {
 
 pub fn ref_object_schema_test() {
   schema([
-    #("fullname", just_string),
+    #("fullname", json_schema.string()),
     #("user", object([#("name", ref("fullname"))], ["name"])),
   ])
   |> birdie.snap(title: "ref_object_schema_test")
@@ -170,7 +149,9 @@ pub fn nested_object_test() {
           #(
             "little_box",
             json_schema.Inline(
-              object([#("fish", json_schema.Inline(just_string))], ["fish"]),
+              object([#("fish", json_schema.Inline(json_schema.string()))], [
+                "fish",
+              ]),
             ),
           ),
         ],
@@ -184,7 +165,9 @@ pub fn nested_object_test() {
           #(
             "little_bird",
             json_schema.Inline(
-              object([#("fish", json_schema.Inline(just_integer))], ["fish"]),
+              object([#("fish", json_schema.Inline(json_schema.integer()))], [
+                "fish",
+              ]),
             ),
           ),
         ],
@@ -196,13 +179,16 @@ pub fn nested_object_test() {
 }
 
 pub fn pure_dictionary_test() {
-  schema([#("Bag", dict(json_schema.Inline(just_integer)))])
+  schema([#("Bag", dict(json_schema.Inline(json_schema.integer())))])
   |> birdie.snap(title: "pure_dictionary_test")
 }
 
 pub fn nested_dictionary_test() {
   schema([
-    #("Bag", dict(json_schema.Inline(dict(json_schema.Inline(just_integer))))),
+    #(
+      "Bag",
+      dict(json_schema.Inline(dict(json_schema.Inline(json_schema.integer())))),
+    ),
   ])
   |> birdie.snap(title: "nested_dictionary_test")
 }
@@ -212,9 +198,9 @@ pub fn object_and_additional_test() {
     #(
       "Preference",
       json_schema.Object(
-        dict.from_list([#("colour", json_schema.Inline(just_string))]),
+        dict.from_list([#("colour", json_schema.Inline(json_schema.string()))]),
         ["colour"],
-        Some(json_schema.Inline(just_integer)),
+        Some(json_schema.Inline(json_schema.integer())),
         None,
         0,
         False,
@@ -232,7 +218,7 @@ pub fn explicitly_no_additional_test() {
     #(
       "Preference",
       json_schema.Object(
-        dict.from_list([#("colour", json_schema.Inline(just_string))]),
+        dict.from_list([#("colour", json_schema.Inline(json_schema.string()))]),
         ["colour"],
         Some(json_schema.Inline(json_schema.AlwaysFails)),
         None,
@@ -254,8 +240,8 @@ pub fn empty_object_is_dictionary_of_anything_test() {
 
 pub fn allof_named_test() {
   schema([
-    #("A", object([#("a", json_schema.Inline(just_string))], ["a"])),
-    #("B", object([#("b", json_schema.Inline(just_string))], ["b"])),
+    #("A", object([#("a", json_schema.Inline(json_schema.string()))], ["a"])),
+    #("B", object([#("b", json_schema.Inline(json_schema.string()))], ["b"])),
     #("Both", json_schema.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
   ])
   |> birdie.snap(title: "allof_named_test")
@@ -265,7 +251,9 @@ pub fn single_allof_test() {
   schema([
     #(
       "Box",
-      json_schema.AllOf(NonEmptyList(json_schema.Inline(just_string), [])),
+      json_schema.AllOf(
+        NonEmptyList(json_schema.Inline(json_schema.string()), []),
+      ),
     ),
   ])
   |> birdie.snap(title: "single_allof_test")
@@ -276,8 +264,8 @@ pub fn unsupported_anyof_test() {
     #(
       "Box",
       json_schema.AnyOf(
-        NonEmptyList(json_schema.Inline(just_string), [
-          json_schema.Inline(just_integer),
+        NonEmptyList(json_schema.Inline(json_schema.string()), [
+          json_schema.Inline(json_schema.integer()),
         ]),
       ),
     ),

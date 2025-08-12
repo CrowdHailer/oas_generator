@@ -6,29 +6,6 @@ import oas
 import oas/generator as gen
 import oas/json_schema
 
-const just_string = json_schema.String(
-  None,
-  None,
-  None,
-  None,
-  False,
-  None,
-  None,
-  False,
-)
-
-const just_integer = json_schema.Integer(
-  None,
-  None,
-  None,
-  None,
-  None,
-  False,
-  None,
-  None,
-  False,
-)
-
 fn array(items) {
   json_schema.Array(None, None, False, items, False, None, None, False)
 }
@@ -127,7 +104,7 @@ pub fn just_string_request_test() {
           [],
           json_schema.Inline(oas.RequestBody(
             None,
-            just_json(json_schema.Inline(just_integer)),
+            just_json(json_schema.Inline(json_schema.integer())),
             True,
           )),
           [#(oas.Status(204), empty_response())],
@@ -155,7 +132,7 @@ pub fn object_request_test() {
               json_schema.Inline(
                 object(
                   [
-                    #("size", json_schema.Inline(just_integer)),
+                    #("size", json_schema.Inline(json_schema.integer())),
                     #(
                       "shape",
                       json_schema.Ref("#/components/schemas/Shape", None, None),
@@ -194,7 +171,7 @@ pub fn nested_object_request_test() {
                   json_schema.Inline(
                     object(
                       [
-                        #("id", json_schema.Inline(just_integer)),
+                        #("id", json_schema.Inline(json_schema.integer())),
                         #(
                           "flavour",
                           json_schema.Ref(
@@ -234,7 +211,9 @@ pub fn dictionary_request_test() {
           json_schema.Inline(oas.RequestBody(
             None,
             just_json(
-              json_schema.Inline(dict(json_schema.Inline(just_integer))),
+              json_schema.Inline(
+                dict(json_schema.Inline(json_schema.integer())),
+              ),
             ),
             True,
           )),
@@ -287,7 +266,9 @@ pub fn single_inline_object_response_test() {
                   [
                     #(
                       "items",
-                      json_schema.Inline(array(json_schema.Inline(just_string))),
+                      json_schema.Inline(
+                        array(json_schema.Inline(json_schema.string())),
+                      ),
                     ),
                     #("thing", ref("thing")),
                   ],
@@ -321,9 +302,12 @@ pub fn nested_object_in_response_test() {
                     #(
                       "metadata",
                       json_schema.Inline(
-                        object([#("param", json_schema.Inline(just_string))], [
-                          "param",
-                        ]),
+                        object(
+                          [#("param", json_schema.Inline(json_schema.string()))],
+                          [
+                            "param",
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -354,7 +338,9 @@ pub fn array_parameters_response_test() {
               "tags",
               None,
               False,
-              json_schema.Inline(array(json_schema.Inline(just_string))),
+              json_schema.Inline(
+                array(json_schema.Inline(json_schema.string())),
+              ),
             )),
           ],
           [#(oas.Status(200), json_response(ref("account")))],
