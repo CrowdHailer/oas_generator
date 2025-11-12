@@ -12,53 +12,53 @@ import gleam/dynamic/decode
 import gleam/dict
 
 pub type BigBird {
-  BigBird(little_bird: Internal0)
+  BigBird(little_bird: Anon46a41d9d)
 }
 
 pub type BigBox {
-  BigBox(little_box: Internal1)
+  BigBox(little_box: Anon7abc434f)
 }
 
-pub type Internal0 {
-  Internal0(fish: Int)
+pub type Anon46a41d9d {
+  Anon46a41d9d(fish: Int)
 }
 
-pub type Internal1 {
-  Internal1(fish: String)
+pub type Anon7abc434f {
+  Anon7abc434f(fish: String)
 }
 
-pub fn internal_1_decoder() {
+pub fn anon_7abc434f_decoder() {
   use fish <- decode.field("fish", decode.string)
-  decode.success(Internal1(fish: fish))
+  decode.success(Anon7abc434f(fish: fish))
 }
 
-pub fn internal_1_encode(data: Internal1) {
+pub fn anon_7abc434f_encode(data: Anon7abc434f) {
   utils.object([#("fish", json.string(data.fish))])
 }
 
-pub fn internal_0_decoder() {
+pub fn anon_46a41d9d_decoder() {
   use fish <- decode.field("fish", decode.int)
-  decode.success(Internal0(fish: fish))
+  decode.success(Anon46a41d9d(fish: fish))
 }
 
-pub fn internal_0_encode(data: Internal0) {
+pub fn anon_46a41d9d_encode(data: Anon46a41d9d) {
   utils.object([#("fish", json.int(data.fish))])
 }
 
 pub fn big_box_decoder() {
-  use little_box <- decode.field("little_box", internal_1_decoder())
+  use little_box <- decode.field("little_box", anon_7abc434f_decoder())
   decode.success(BigBox(little_box: little_box))
 }
 
 pub fn big_box_encode(data: BigBox) {
-  utils.object([#("little_box", internal_1_encode(data.little_box))])
+  utils.object([#("little_box", n7abc434f_encode(data.little_box))])
 }
 
 pub fn big_bird_decoder() {
-  use little_bird <- decode.field("little_bird", internal_0_decoder())
+  use little_bird <- decode.field("little_bird", anon_46a41d9d_decoder())
   decode.success(BigBird(little_bird: little_bird))
 }
 
 pub fn big_bird_encode(data: BigBird) {
-  utils.object([#("little_bird", internal_0_encode(data.little_bird))])
+  utils.object([#("little_bird", n46a41d9d_encode(data.little_bird))])
 }

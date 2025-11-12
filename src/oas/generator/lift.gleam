@@ -1,6 +1,10 @@
+import gleam/bit_array
+import gleam/bool
+import gleam/crypto
 import gleam/dict
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import non_empty_list.{NonEmptyList}
 import oas/generator/utils
 import oas/json_schema
@@ -16,7 +20,7 @@ pub type Schema(t) {
 }
 
 pub type Lifted =
-  Schema(Int)
+  Schema(String)
 
 pub type Top =
   Schema(Fields)
@@ -74,11 +78,55 @@ pub type Primitive {
 //   }
 // }
 
+fn schema_to_string(schema) {
+  case schema {
+    Compound(id) -> id
+    Array(items) -> "Array(" <> schema_to_string(items) <> ")"
+    Dictionary(field) -> "Dict(" <> schema_to_string(field) <> ")"
+    Named(name) -> "Named(" <> name <> ")"
+    Primitive(primitive) ->
+      case primitive {
+        Boolean -> "Boolean"
+        Integer -> "Integer"
+        Number -> "Number"
+        String -> "String"
+        Null -> "Null"
+        Always -> "Always"
+        Never -> "Never"
+      }
+    Tuple(inner) ->
+      "Tuple(" <> list.map(inner, schema_to_string) |> string.join(",") <> ")"
+    Unsupported -> "Unsupported"
+  }
+}
+
 fn not_top(top: Top, acc) -> #(Lifted, _) {
   case top {
     Compound(fields) -> {
       let id = list.length(acc)
-      let acc = [fields, ..acc]
+      let Fields(named:, additional:, required:) = fields
+      let id =
+        list.map(named, fn(named_field) {
+          let #(name, #(schema, nullable)) = named_field
+          name <> schema_to_string(schema) <> bool.to_string(nullable)
+        })
+        |> string.concat
+      let additional = case additional {
+        Some(schema) -> schema_to_string(schema)
+        None -> ""
+      }
+      let required = string.concat(required)
+      let unique = id <> additional <> required
+
+      let hash = crypto.hash(crypto.Sha256, <<unique:utf8>>)
+
+      let raw = bit_array.base16_encode(hash)
+      let first = string.slice(raw, 0, 1)
+      let rest = string.slice(raw, 1, 7)
+      // A capitalied first letter fixes issues with calling to snake case
+      let id = string.uppercase(first) <> string.lowercase(rest)
+      let acc = [#(id, fields), ..acc]
+
       #(Compound(id), acc)
     }
     Named(name) -> #(Named(name), acc)

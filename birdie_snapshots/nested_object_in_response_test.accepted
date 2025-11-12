@@ -18,11 +18,11 @@ import oas/generator/utils
 import gleam/option.{type Option, None}
 
 pub type UsersGetUsersResponse {
-  UsersGetUsersResponse(metadata: Internal0)
+  UsersGetUsersResponse(metadata: Anon59faa25f)
 }
 
-pub type Internal0 {
-  Internal0(param: String)
+pub type Anon59faa25f {
+  Anon59faa25f(param: String)
 }
 
 pub fn users_get_users_request(base) {
@@ -38,18 +38,18 @@ pub fn users_get_users_response(response) {
   let response.Response(status:, body:, ..) = response
   case status {
     200 -> json.parse_bits(body, {
-        use metadata <- decode.field("metadata", internal_0_decoder())
+        use metadata <- decode.field("metadata", anon_59faa25f_decoder())
         decode.success(UsersGetUsersResponse(metadata: metadata))
       }) |> result.map(Ok)
     _ -> response |> Error |> Ok
   }
 }
 
-pub fn internal_0_decoder() {
+pub fn anon_59faa25f_decoder() {
   use param <- decode.field("param", decode.string)
-  decode.success(Internal0(param: param))
+  decode.success(Anon59faa25f(param: param))
 }
 
-pub fn internal_0_encode(data: Internal0) {
+pub fn anon_59faa25f_encode(data: Anon59faa25f) {
   utils.object([#("param", json.string(data.param))])
 }

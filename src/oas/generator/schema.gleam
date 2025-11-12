@@ -24,8 +24,9 @@ pub fn generate(schemas) {
       named,
       internal
         |> list.reverse
-        |> list.index_map(fn(fields, index) {
-          #("internal_" <> int.to_string(index), lift.Compound(fields))
+        |> list.index_map(fn(entry, index) {
+          let #(hash, fields) = entry
+          #("anon_" <> hash, lift.Compound(fields))
         }),
     )
   l.fold(named, #([], [], []), fn(acc, entry) {
@@ -143,7 +144,7 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
       l.Done(glance.TupleType(items))
     }
     lift.Compound(index) -> {
-      let type_ = "Internal" <> int.to_string(index)
+      let type_ = "Anon" <> index
       l.Done(glance.NamedType(type_, None, []))
     }
     lift.Dictionary(values) -> {
@@ -277,7 +278,7 @@ pub fn fields_to_encode_body(properties, required, additional) {
 }
 
 /// This handles a lifted encoder
-pub fn to_encoder(lifted) -> l.Lookup(glance.Expression) {
+pub fn to_encoder(lifted: lift.Schema(String)) -> l.Lookup(glance.Expression) {
   case lifted {
     lift.Named(ref) -> {
       use mod, name <- l.Lookup(ref)
@@ -326,8 +327,8 @@ pub fn to_encoder(lifted) -> l.Lookup(glance.Expression) {
       ])
       |> l.Done
     }
-    lift.Compound(index) ->
-      glance.Variable(encode_fn("internal_" <> int.to_string(index))) |> l.Done
+    lift.Compound(some_name) ->
+      glance.Variable(encode_fn("_" <> some_name)) |> l.Done
     lift.Dictionary(values) -> {
       use values <- l.then(to_encoder(values))
       glance.FnCapture(None, ast.access("utils", "dict"), [], [
@@ -545,7 +546,7 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
       ast.call1("decode", "list", items) |> l.Done
     }
     lift.Compound(index) -> {
-      let func = "internal_" <> int.to_string(index) <> "_decoder"
+      let func = "anon_" <> index <> "_decoder"
       glance.Call(glance.Variable(func), []) |> l.Done
     }
     lift.Dictionary(values) -> {

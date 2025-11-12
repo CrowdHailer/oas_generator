@@ -17,15 +17,15 @@ import myservice/schema
 import oas/generator/utils
 import gleam/option.{type Option, None}
 
-pub type Internal0 {
-  Internal0(flavour: schema.Flavour, id: Int)
+pub type AnonCd3d2e10 {
+  AnonCd3d2e10(flavour: schema.Flavour, id: Int)
 }
 
 pub fn set_params_request(base, data) {
   let method = http.Post
   let path = "/params"
   let query = []
-  let body = utils.json_to_bits(json.array(data, internal_0_encode))
+  let body = utils.json_to_bits(json.array(data, cd3d2e10_encode))
   base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
     query,
   ) |> utils.set_body("application/json", body)
@@ -39,13 +39,13 @@ pub fn set_params_response(response) {
   }
 }
 
-pub fn internal_0_decoder() {
+pub fn anon_cd3d2e10_decoder() {
   use flavour <- decode.field("flavour", schema.flavour_decoder())
   use id <- decode.field("id", decode.int)
-  decode.success(Internal0(flavour: flavour, id: id))
+  decode.success(AnonCd3d2e10(flavour: flavour, id: id))
 }
 
-pub fn internal_0_encode(data: Internal0) {
+pub fn anon_cd3d2e10_encode(data: AnonCd3d2e10) {
   utils.object(
     [
       #("flavour", schema.flavour_encode(data.flavour)),

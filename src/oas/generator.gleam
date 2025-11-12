@@ -765,8 +765,9 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
     run_legacy(
       l.seq(
         list.index_map(internal, fn(fields, index) {
+          let #(id, fields) = fields
           let lift.Fields(properties, additional, required) = fields
-          let name = "Internal_" <> int.to_string(index)
+          let name = "Anon_" <> id
           // TODO use a better schema function as this needs keeping in track for dictionaries etc
           use type_ <- l.then(schema.custom_type(
             name,
