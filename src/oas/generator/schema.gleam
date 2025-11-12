@@ -24,9 +24,9 @@ pub fn generate(schemas) {
       named,
       internal
         |> list.reverse
-        |> list.index_map(fn(entry, index) {
+        |> list.map(fn(entry) {
           let #(hash, fields) = entry
-          #("anon_" <> hash, lift.Compound(fields))
+          #(lift.content_id_to_fn_prefix(hash), lift.Compound(fields))
         }),
     )
   l.fold(named, #([], [], []), fn(acc, entry) {
@@ -143,8 +143,8 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
       use items <- l.then(l.seq(list.map(items, to_type)))
       l.Done(glance.TupleType(items))
     }
-    lift.Compound(index) -> {
-      let type_ = "Anon" <> index
+    lift.Compound(id) -> {
+      let type_ = lift.content_id_to_type(id)
       l.Done(glance.NamedType(type_, None, []))
     }
     lift.Dictionary(values) -> {
@@ -165,7 +165,10 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
 pub fn to_encode_fn(entry) {
   let #(name, top) = entry
   let type_ = ast.name_for_gleam_type(name)
+  do_to_encode_fn(name, type_, top)
+}
 
+pub fn do_to_encode_fn(name, type_, top) {
   let arg = glance.Variable("data")
   use exp <- l.then(case top {
     lift.Named(n) -> {
@@ -278,7 +281,7 @@ pub fn fields_to_encode_body(properties, required, additional) {
 }
 
 /// This handles a lifted encoder
-pub fn to_encoder(lifted: lift.Schema(String)) -> l.Lookup(glance.Expression) {
+pub fn to_encoder(lifted: lift.Lifted) -> l.Lookup(glance.Expression) {
   case lifted {
     lift.Named(ref) -> {
       use mod, name <- l.Lookup(ref)
@@ -328,7 +331,8 @@ pub fn to_encoder(lifted: lift.Schema(String)) -> l.Lookup(glance.Expression) {
       |> l.Done
     }
     lift.Compound(some_name) ->
-      glance.Variable(encode_fn("_" <> some_name)) |> l.Done
+      glance.Variable(lift.content_id_to_fn_prefix(some_name) <> "_encode")
+      |> l.Done
     lift.Dictionary(values) -> {
       use values <- l.then(to_encoder(values))
       glance.FnCapture(None, ast.access("utils", "dict"), [], [
@@ -545,8 +549,8 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
       use items <- l.then(to_decoder(items))
       ast.call1("decode", "list", items) |> l.Done
     }
-    lift.Compound(index) -> {
-      let func = "anon_" <> index <> "_decoder"
+    lift.Compound(id) -> {
+      let func = lift.content_id_to_fn_prefix(id) <> "_decoder"
       glance.Call(glance.Variable(func), []) |> l.Done
     }
     lift.Dictionary(values) -> {

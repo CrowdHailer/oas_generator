@@ -20,7 +20,7 @@ pub type Schema(t) {
 }
 
 pub type Lifted =
-  Schema(String)
+  Schema(ContentId)
 
 pub type Top =
   Schema(Fields)
@@ -31,6 +31,11 @@ pub type Fields {
     additional: Option(Lifted),
     required: List(String),
   )
+}
+
+/// A unique id from hashing the fields contents of an anonymous object
+pub type ContentId {
+  ContentId(first: String, rest: String)
 }
 
 pub type Primitive {
@@ -78,9 +83,23 @@ pub type Primitive {
 //   }
 // }
 
+fn pascal_case(id) {
+  let ContentId(first:, rest:) = id
+  string.uppercase(first) <> string.lowercase(rest)
+}
+
+pub fn content_id_to_type(id) {
+  "Anon" <> pascal_case(id)
+}
+
+pub fn content_id_to_fn_prefix(id) {
+  let ContentId(first:, rest:) = id
+  "anon_" <> string.lowercase(first) <> string.lowercase(rest)
+}
+
 fn schema_to_string(schema) {
   case schema {
-    Compound(id) -> id
+    Compound(id) -> pascal_case(id)
     Array(items) -> "Array(" <> schema_to_string(items) <> ")"
     Dictionary(field) -> "Dict(" <> schema_to_string(field) <> ")"
     Named(name) -> "Named(" <> name <> ")"
@@ -100,31 +119,34 @@ fn schema_to_string(schema) {
   }
 }
 
+fn fields_to_content_id(fields) {
+  let Fields(named:, additional:, required:) = fields
+  let id =
+    list.map(named, fn(named_field) {
+      let #(name, #(schema, nullable)) = named_field
+      name <> schema_to_string(schema) <> bool.to_string(nullable)
+    })
+    |> string.concat
+  let additional = case additional {
+    Some(schema) -> schema_to_string(schema)
+    None -> ""
+  }
+  let required = string.concat(required)
+  let unique = id <> additional <> required
+
+  let hash = crypto.hash(crypto.Sha256, <<unique:utf8>>)
+
+  let raw = bit_array.base16_encode(hash)
+  let first = string.slice(raw, 0, 1)
+  let rest = string.slice(raw, 1, 7)
+  // A capitalied first letter fixes issues with calling to snake case
+  ContentId(first:, rest:)
+}
+
 fn not_top(top: Top, acc) -> #(Lifted, _) {
   case top {
     Compound(fields) -> {
-      let id = list.length(acc)
-      let Fields(named:, additional:, required:) = fields
-      let id =
-        list.map(named, fn(named_field) {
-          let #(name, #(schema, nullable)) = named_field
-          name <> schema_to_string(schema) <> bool.to_string(nullable)
-        })
-        |> string.concat
-      let additional = case additional {
-        Some(schema) -> schema_to_string(schema)
-        None -> ""
-      }
-      let required = string.concat(required)
-      let unique = id <> additional <> required
-
-      let hash = crypto.hash(crypto.Sha256, <<unique:utf8>>)
-
-      let raw = bit_array.base16_encode(hash)
-      let first = string.slice(raw, 0, 1)
-      let rest = string.slice(raw, 1, 7)
-      // A capitalied first letter fixes issues with calling to snake case
-      let id = string.uppercase(first) <> string.lowercase(rest)
+      let id = fields_to_content_id(fields)
       let acc = [#(id, fields), ..acc]
 
       #(Compound(id), acc)

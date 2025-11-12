@@ -764,23 +764,30 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
   let zipped =
     run_legacy(
       l.seq(
-        list.index_map(internal, fn(fields, index) {
+        list.map(internal, fn(fields) {
           let #(id, fields) = fields
           let lift.Fields(properties, additional, required) = fields
-          let name = "Anon_" <> id
+          let type_name = lift.content_id_to_type(id)
           // TODO use a better schema function as this needs keeping in track for dictionaries etc
           use type_ <- l.then(schema.custom_type(
-            name,
+            type_name,
             properties,
             additional,
             required,
           ))
 
-          use encoder <- l.then(
-            schema.to_encode_fn(#(name, lift.Compound(fields))),
-          )
+          let fn_name = lift.content_id_to_fn_prefix(id)
+          use encoder <- l.then(schema.do_to_encode_fn(
+            fn_name,
+            type_name,
+            lift.Compound(fields),
+          ))
+          // fn_name encodes correctly
+          // note `ab_12` -> `AB12` Yes
+          // note `AB12` -> `ab12` No if the 12 is start of a hash value
+          // My suggestion is that eventually we should pass a object of `prefix: type:` with them precomputed from context
           use decoder <- l.then(
-            schema.to_decode_fn(#(name, lift.Compound(fields))),
+            schema.to_decode_fn(#(fn_name, lift.Compound(fields))),
           )
           #(type_, [encoder, decoder]) |> l.Done
         }),

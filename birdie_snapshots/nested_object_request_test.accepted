@@ -25,7 +25,7 @@ pub fn set_params_request(base, data) {
   let method = http.Post
   let path = "/params"
   let query = []
-  let body = utils.json_to_bits(json.array(data, cd3d2e10_encode))
+  let body = utils.json_to_bits(json.array(data, anon_cd3d2e10_encode))
   base |> utils.set_method(method) |> utils.append_path(path) |> utils.set_query(
     query,
   ) |> utils.set_body("application/json", body)

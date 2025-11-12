@@ -51,7 +51,7 @@ pub fn big_box_decoder() {
 }
 
 pub fn big_box_encode(data: BigBox) {
-  utils.object([#("little_box", n7abc434f_encode(data.little_box))])
+  utils.object([#("little_box", anon_7abc434f_encode(data.little_box))])
 }
 
 pub fn big_bird_decoder() {
@@ -60,5 +60,5 @@ pub fn big_bird_decoder() {
 }
 
 pub fn big_bird_encode(data: BigBird) {
-  utils.object([#("little_bird", n46a41d9d_encode(data.little_bird))])
+  utils.object([#("little_bird", anon_46a41d9d_encode(data.little_bird))])
 }
