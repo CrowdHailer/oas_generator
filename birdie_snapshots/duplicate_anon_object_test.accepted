@@ -1,0 +1,47 @@
+---
+version: 1.3.0
+title: duplicate_anon_object_test
+file: ./test/oas/generator_test.gleam
+test_name: duplicate_anon_object_test
+---
+import gleam/option.{type Option, None}
+import oas/generator/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/dict
+
+pub type BigBox {
+  BigBox(favourite: Anon5b08f9eb, ingredients: List(Anon5b08f9eb))
+}
+
+pub type Anon5b08f9eb {
+  Anon5b08f9eb(flavour: String)
+}
+
+pub fn anon_5b08f9eb_decoder() {
+  use flavour <- decode.field("flavour", decode.string)
+  decode.success(Anon5b08f9eb(flavour: flavour))
+}
+
+pub fn anon_5b08f9eb_encode(data: Anon5b08f9eb) {
+  utils.object([#("flavour", json.string(data.flavour))])
+}
+
+pub fn big_box_decoder() {
+  use favourite <- decode.field("favourite", anon_5b08f9eb_decoder())
+  use ingredients <- decode.field(
+    "ingredients",
+    decode.list(anon_5b08f9eb_decoder()),
+  )
+  decode.success(BigBox(favourite: favourite, ingredients: ingredients))
+}
+
+pub fn big_box_encode(data: BigBox) {
+  utils.object(
+    [
+      #("favourite", anon_5b08f9eb_encode(data.favourite)),
+      #("ingredients", json.array(_, anon_5b08f9eb_encode)(data.ingredients))
+    ],
+  )
+}

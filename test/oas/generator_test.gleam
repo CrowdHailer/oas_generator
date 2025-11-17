@@ -178,6 +178,28 @@ pub fn nested_object_test() {
   |> birdie.snap(title: "nested_object_test")
 }
 
+pub fn duplicate_anon_object_test() {
+  let anon =
+    json_schema.Inline(
+      object([#("flavour", json_schema.Inline(json_schema.string()))], [
+        "flavour",
+      ]),
+    )
+  schema([
+    #(
+      "big_box",
+      object(
+        [
+          #("ingredients", json_schema.Inline(json_schema.array(anon))),
+          #("favourite", anon),
+        ],
+        ["ingredients", "favourite"],
+      ),
+    ),
+  ])
+  |> birdie.snap(title: "duplicate_anon_object_test")
+}
+
 pub fn pure_dictionary_test() {
   schema([#("Bag", dict(json_schema.Inline(json_schema.integer())))])
   |> birdie.snap(title: "pure_dictionary_test")

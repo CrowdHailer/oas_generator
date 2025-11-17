@@ -23,6 +23,7 @@ pub fn generate(schemas) {
     list.append(
       named,
       internal
+        |> list.unique
         |> list.reverse
         |> list.map(fn(entry) {
           let #(hash, fields) = entry
