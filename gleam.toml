@@ -1,5 +1,5 @@
 name = "oas_generator"
-version = "2.2.2"
+version = "2.2.3"
 description = "Generate HTTP clients from Open API specs."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "crowdhailer", repo = "oas_generator" }

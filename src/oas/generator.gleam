@@ -388,7 +388,7 @@ fn gen_request_for_op(
             ]),
           ),
         ),
-        glance.Expression(ast.call1("t", "Done", glance.Variable("data"))),
+        glance.Expression(ast.call1("t", "done", glance.Variable("data"))),
       ],
       location: glance.Span(0, 0),
     )
