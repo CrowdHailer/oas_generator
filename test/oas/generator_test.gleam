@@ -1,5 +1,6 @@
 import birdie
 import gleam/dict
+import gleam/json
 import gleam/option.{None, Some}
 import gleeunit/should
 import non_empty_list.{NonEmptyList}
@@ -178,6 +179,17 @@ pub fn nested_object_test() {
   |> birdie.snap(title: "nested_object_test")
 }
 
+pub fn empty_object_test() {
+  let assert Ok(json_schema.Object(properties:, ..)) =
+    json.parse("{\"type\":\"object\"}", json_schema.decoder())
+  assert dict.is_empty(properties)
+
+  schema([
+    #("empty", object([], [])),
+  ])
+  |> birdie.snap(title: "empty_object_test")
+}
+
 pub fn duplicate_anon_object_test() {
   let anon =
     json_schema.Inline(
@@ -256,7 +268,11 @@ pub fn explicitly_no_additional_test() {
 }
 
 pub fn empty_object_is_dictionary_of_anything_test() {
-  schema([#("Preference", object([], []))])
+  // An empty object in a specification is considered a AlwayPass type
+  let assert Ok(json_schema.AlwaysPasses) =
+    json.parse("{}", json_schema.decoder())
+
+  schema([#("Preference", json_schema.AlwaysPasses)])
   |> birdie.snap(title: "empty_object_is_dictionary_of_anything_test")
 }
 

@@ -197,7 +197,7 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
               let #(schema, acc) = not_top(top, acc)
               #(Dictionary(schema), nullable, acc)
             }
-            True, None -> #(Dictionary(Primitive(Always)), nullable, acc)
+            True, None -> #(Primitive(Null), nullable, acc)
             _, _ -> {
               let #(acc, properties) =
                 list.map_fold(

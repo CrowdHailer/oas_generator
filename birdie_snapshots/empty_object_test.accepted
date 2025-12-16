@@ -1,0 +1,21 @@
+---
+version: 1.3.0
+title: empty_object_test
+---
+import gleam/option.{type Option, None}
+import oas/generator/utils
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/dict
+
+pub type Empty =
+  Nil
+
+pub fn empty_decoder() {
+  decode.new_primitive_decoder("Nil", fn(_) { Ok(Nil) })
+}
+
+pub fn empty_encode(_data: Empty) {
+  json.null()
+}

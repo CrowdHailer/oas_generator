@@ -1,8 +1,6 @@
 ---
 version: 1.3.0
 title: empty_object_is_dictionary_of_anything_test
-file: ./test/oas/generator_test.gleam
-test_name: empty_object_is_dictionary_of_anything_test
 ---
 import gleam/option.{type Option, None}
 import oas/generator/utils
@@ -12,12 +10,12 @@ import gleam/dynamic/decode
 import gleam/dict
 
 pub type Preference =
-  dict.Dict(String, utils.Any)
+  utils.Any
 
 pub fn preference_decoder() {
-  decode.dict(decode.string, utils.any_decoder())
+  utils.any_decoder()
 }
 
 pub fn preference_encode(data: Preference) {
-  utils.dict(data, utils.any_to_json)
+  utils.any_to_json(data)
 }
