@@ -1,5 +1,5 @@
 name = "oas_generator_utils"
-version = "1.0.0"
+version = "1.1.0"
 target = "javascript"
 
 description = "Resuable utilities for projects generated with oas_generator for Open API Spec, JSON schema and MCP client or server."

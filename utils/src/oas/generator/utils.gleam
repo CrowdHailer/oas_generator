@@ -38,7 +38,7 @@ pub fn set_body(request, mime, content) {
 }
 
 pub type Any {
-  Object(Dict(String, Any))
+  Object(Fields)
   Array(List(Any))
   Boolean(Bool)
   Integer(Int)
@@ -47,9 +47,12 @@ pub type Any {
   Null
 }
 
+pub type Fields =
+  Dict(String, Any)
+
 pub fn any_decoder() {
   use <- decode.recursive
-  decode.one_of(decode.map(decode.dict(decode.string, any_decoder()), Object), [
+  decode.one_of(decode.map(fields_decoder(), Object), [
     decode.list(any_decoder()) |> decode.map(Array),
     decode.bool |> decode.map(Boolean),
     decode.int |> decode.map(Integer),
@@ -63,6 +66,10 @@ pub fn any_decoder() {
   ])
 }
 
+pub fn fields_decoder() {
+  decode.dict(decode.string, any_decoder())
+}
+
 pub fn json_to_bits(json) {
   json
   |> json.to_string
@@ -71,7 +78,7 @@ pub fn json_to_bits(json) {
 
 pub fn any_to_json(any) {
   case any {
-    Object(dict) -> json.dict(dict, fn(x) { x }, any_to_json)
+    Object(fields) -> fields_to_json(fields)
     Array(list) -> json.array(list, any_to_json)
     Boolean(bool) -> json.bool(bool)
     Integer(int) -> json.int(int)
@@ -81,17 +88,13 @@ pub fn any_to_json(any) {
   }
 }
 
+pub fn fields_to_json(fields) {
+  json.dict(fields, fn(x) { x }, any_to_json)
+}
+
 pub fn any_to_dynamic(any) {
   case any {
-    Object(entries) ->
-      dynamic.properties(
-        entries
-        |> dict.to_list
-        |> list.map(fn(entry) {
-          let #(key, value) = entry
-          #(dynamic.string(key), any_to_dynamic(value))
-        }),
-      )
+    Object(fields) -> fields_to_dynamic(fields)
     Array(items) -> dynamic.list(list.map(items, any_to_dynamic))
     Boolean(bool) -> dynamic.bool(bool)
     Integer(int) -> dynamic.int(int)
@@ -99,6 +102,17 @@ pub fn any_to_dynamic(any) {
     String(string) -> dynamic.string(string)
     Null -> dynamic.nil()
   }
+}
+
+pub fn fields_to_dynamic(fields) {
+  dynamic.properties(
+    fields
+    |> dict.to_list
+    |> list.map(fn(entry) {
+      let #(key, value) = entry
+      #(dynamic.string(key), any_to_dynamic(value))
+    }),
+  )
 }
 
 pub type Never {
