@@ -1,13 +1,13 @@
 import birdie
+import castor
 import gleam/dict
 import gleam/json
 import gleam/option.{None, Some}
 import gleeunit/should
 import non_empty_list.{NonEmptyList}
 import oas/generator as gen
-import oas/json_schema
 
-const nullable_string = json_schema.String(
+const nullable_string = castor.String(
   None,
   None,
   None,
@@ -19,7 +19,7 @@ const nullable_string = json_schema.String(
 )
 
 fn object(params, required) {
-  json_schema.Object(
+  castor.Object(
     dict.from_list(params),
     required,
     None,
@@ -33,21 +33,11 @@ fn object(params, required) {
 }
 
 fn dict(of) {
-  json_schema.Object(
-    dict.new(),
-    [],
-    Some(of),
-    None,
-    0,
-    False,
-    None,
-    None,
-    False,
-  )
+  castor.Object(dict.new(), [], Some(of), None, 0, False, None, None, False)
 }
 
 fn ref(thing) {
-  json_schema.Ref("#/components/schemas/" <> thing, None, None)
+  castor.Ref("#/components/schemas/" <> thing, None, None)
 }
 
 fn schema(schemas) {
@@ -57,34 +47,34 @@ fn schema(schemas) {
 }
 
 pub fn nil_alias_test() {
-  schema([#("other_nil", json_schema.Null(None, None, False))])
+  schema([#("other_nil", castor.Null(None, None, False))])
   |> birdie.snap(title: "nil_alias_test")
 }
 
 // Simple things don't become new custom types
 pub fn simple_string_schema_test() {
-  schema([#("my_string", json_schema.string())])
+  schema([#("my_string", castor.string())])
   |> birdie.snap(title: "simple string schema test")
 }
 
 pub fn always_test() {
-  schema([#("yes", json_schema.AlwaysPasses)])
+  schema([#("yes", castor.AlwaysPasses)])
   |> birdie.snap(title: "always_test")
 }
 
 pub fn never_test() {
-  schema([#("yes", json_schema.AlwaysFails)])
+  schema([#("yes", castor.AlwaysFails)])
   |> birdie.snap(title: "never_test")
 }
 
 // pub fn simple_nullable_schema_test() {
-//   schema([#("my_string", json_schema.string())])
+//   schema([#("my_string", castor.string())])
 //   |> birdie.snap(title: "simple_nullable_schema_test")
 // }
 
 pub fn array_of_primitive_test() {
   schema([
-    #("my_array", json_schema.array(json_schema.Inline(json_schema.integer()))),
+    #("my_array", castor.array(castor.Inline(castor.integer()))),
   ])
   |> birdie.snap(title: "array_of_primitive_test")
 }
@@ -93,49 +83,42 @@ pub fn nested_array_of_primitive_test() {
   schema([
     #(
       "my_array",
-      json_schema.array(
-        json_schema.Inline(
-          json_schema.array(json_schema.Inline(json_schema.integer())),
-        ),
-      ),
+      castor.array(castor.Inline(castor.array(castor.Inline(castor.integer())))),
     ),
   ])
   |> birdie.snap(title: "nested_array_of_primitive_test")
 }
 
 pub fn array_of_references_test() {
-  schema([#("my_array", json_schema.array(ref("totals")))])
+  schema([#("my_array", castor.array(ref("totals")))])
   |> birdie.snap(title: "array_of_references_test")
 }
 
 pub fn inline_object_schema_test() {
   let parameters = [
-    #("name", json_schema.Inline(json_schema.string())),
-    #("age", json_schema.Inline(json_schema.integer())),
-    #(
-      "active",
-      json_schema.Inline(json_schema.Boolean(False, None, None, False)),
-    ),
+    #("name", castor.Inline(castor.string())),
+    #("age", castor.Inline(castor.integer())),
+    #("active", castor.Inline(castor.Boolean(False, None, None, False))),
   ]
   schema([#("user", object(parameters, []))])
   |> birdie.snap(title: "inline_object_schema_test")
 }
 
 pub fn required_fields_test() {
-  let parameters = [#("name", json_schema.Inline(json_schema.string()))]
+  let parameters = [#("name", castor.Inline(castor.string()))]
   schema([#("user", object(parameters, ["name"]))])
   |> birdie.snap(title: "required_fields_test")
 }
 
 pub fn nullable_fields_test() {
-  let parameters = [#("name", json_schema.Inline(nullable_string))]
+  let parameters = [#("name", castor.Inline(nullable_string))]
   schema([#("user", object(parameters, ["name"]))])
   |> birdie.snap(title: "nullable_fields_test")
 }
 
 pub fn ref_object_schema_test() {
   schema([
-    #("fullname", json_schema.string()),
+    #("fullname", castor.string()),
     #("user", object([#("name", ref("fullname"))], ["name"])),
   ])
   |> birdie.snap(title: "ref_object_schema_test")
@@ -149,8 +132,8 @@ pub fn nested_object_test() {
         [
           #(
             "little_box",
-            json_schema.Inline(
-              object([#("fish", json_schema.Inline(json_schema.string()))], [
+            castor.Inline(
+              object([#("fish", castor.Inline(castor.string()))], [
                 "fish",
               ]),
             ),
@@ -165,8 +148,8 @@ pub fn nested_object_test() {
         [
           #(
             "little_bird",
-            json_schema.Inline(
-              object([#("fish", json_schema.Inline(json_schema.integer()))], [
+            castor.Inline(
+              object([#("fish", castor.Inline(castor.integer()))], [
                 "fish",
               ]),
             ),
@@ -180,8 +163,8 @@ pub fn nested_object_test() {
 }
 
 pub fn empty_object_test() {
-  let assert Ok(json_schema.Object(properties:, ..)) =
-    json.parse("{\"type\":\"object\"}", json_schema.decoder())
+  let assert Ok(castor.Object(properties:, ..)) =
+    json.parse("{\"type\":\"object\"}", castor.decoder())
   assert dict.is_empty(properties)
 
   schema([
@@ -192,8 +175,8 @@ pub fn empty_object_test() {
 
 pub fn duplicate_anon_object_test() {
   let anon =
-    json_schema.Inline(
-      object([#("flavour", json_schema.Inline(json_schema.string()))], [
+    castor.Inline(
+      object([#("flavour", castor.Inline(castor.string()))], [
         "flavour",
       ]),
     )
@@ -202,7 +185,7 @@ pub fn duplicate_anon_object_test() {
       "big_box",
       object(
         [
-          #("ingredients", json_schema.Inline(json_schema.array(anon))),
+          #("ingredients", castor.Inline(castor.array(anon))),
           #("favourite", anon),
         ],
         ["ingredients", "favourite"],
@@ -213,16 +196,13 @@ pub fn duplicate_anon_object_test() {
 }
 
 pub fn pure_dictionary_test() {
-  schema([#("Bag", dict(json_schema.Inline(json_schema.integer())))])
+  schema([#("Bag", dict(castor.Inline(castor.integer())))])
   |> birdie.snap(title: "pure_dictionary_test")
 }
 
 pub fn nested_dictionary_test() {
   schema([
-    #(
-      "Bag",
-      dict(json_schema.Inline(dict(json_schema.Inline(json_schema.integer())))),
-    ),
+    #("Bag", dict(castor.Inline(dict(castor.Inline(castor.integer()))))),
   ])
   |> birdie.snap(title: "nested_dictionary_test")
 }
@@ -231,10 +211,10 @@ pub fn object_and_additional_test() {
   schema([
     #(
       "Preference",
-      json_schema.Object(
-        dict.from_list([#("colour", json_schema.Inline(json_schema.string()))]),
+      castor.Object(
+        dict.from_list([#("colour", castor.Inline(castor.string()))]),
         ["colour"],
-        Some(json_schema.Inline(json_schema.integer())),
+        Some(castor.Inline(castor.integer())),
         None,
         0,
         False,
@@ -251,10 +231,10 @@ pub fn explicitly_no_additional_test() {
   schema([
     #(
       "Preference",
-      json_schema.Object(
-        dict.from_list([#("colour", json_schema.Inline(json_schema.string()))]),
+      castor.Object(
+        dict.from_list([#("colour", castor.Inline(castor.string()))]),
         ["colour"],
-        Some(json_schema.Inline(json_schema.AlwaysFails)),
+        Some(castor.Inline(castor.AlwaysFails)),
         None,
         0,
         False,
@@ -269,30 +249,24 @@ pub fn explicitly_no_additional_test() {
 
 pub fn empty_object_is_dictionary_of_anything_test() {
   // An empty object in a specification is considered a AlwayPass type
-  let assert Ok(json_schema.AlwaysPasses) =
-    json.parse("{}", json_schema.decoder())
+  let assert Ok(castor.AlwaysPasses) = json.parse("{}", castor.decoder())
 
-  schema([#("Preference", json_schema.AlwaysPasses)])
+  schema([#("Preference", castor.AlwaysPasses)])
   |> birdie.snap(title: "empty_object_is_dictionary_of_anything_test")
 }
 
 pub fn allof_named_test() {
   schema([
-    #("A", object([#("a", json_schema.Inline(json_schema.string()))], ["a"])),
-    #("B", object([#("b", json_schema.Inline(json_schema.string()))], ["b"])),
-    #("Both", json_schema.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
+    #("A", object([#("a", castor.Inline(castor.string()))], ["a"])),
+    #("B", object([#("b", castor.Inline(castor.string()))], ["b"])),
+    #("Both", castor.AllOf(NonEmptyList(ref("A"), [ref("B")]))),
   ])
   |> birdie.snap(title: "allof_named_test")
 }
 
 pub fn single_allof_test() {
   schema([
-    #(
-      "Box",
-      json_schema.AllOf(
-        NonEmptyList(json_schema.Inline(json_schema.string()), []),
-      ),
-    ),
+    #("Box", castor.AllOf(NonEmptyList(castor.Inline(castor.string()), []))),
   ])
   |> birdie.snap(title: "single_allof_test")
 }
@@ -301,9 +275,9 @@ pub fn unsupported_anyof_test() {
   schema([
     #(
       "Box",
-      json_schema.AnyOf(
-        NonEmptyList(json_schema.Inline(json_schema.string()), [
-          json_schema.Inline(json_schema.integer()),
+      castor.AnyOf(
+        NonEmptyList(castor.Inline(castor.string()), [
+          castor.Inline(castor.integer()),
         ]),
       ),
     ),
@@ -313,7 +287,7 @@ pub fn unsupported_anyof_test() {
 
 pub fn enum_of_strings_test() {
   schema([
-    #("Box", json_schema.enum_of_strings(NonEmptyList("a", ["b", "c"]))),
+    #("Box", castor.enum_of_strings(NonEmptyList("a", ["b", "c"]))),
   ])
   |> birdie.snap(title: "enum_of_strings_test")
 }

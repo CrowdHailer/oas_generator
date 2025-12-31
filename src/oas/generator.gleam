@@ -1,3 +1,4 @@
+import castor
 import glance
 import glance_printer
 import gleam/bit_array
@@ -17,7 +18,6 @@ import oas/generator/lift
 import oas/generator/lookup as l
 import oas/generator/misc
 import oas/generator/schema
-import oas/json_schema
 import simplifile
 import snag
 
@@ -29,7 +29,7 @@ fn concat_path(match, root) {
         oas.FixedSegment(s) -> #(current <> "/" <> s, prev)
         oas.MatchSegment(name, schema) -> {
           case schema {
-            json_schema.String(..) -> {
+            castor.String(..) -> {
               let prev = [glance.String(current <> "/"), ..prev]
               let prev = [
                 glance.Variable(ast.name_for_gleam_field_or_var(name)),
@@ -37,7 +37,7 @@ fn concat_path(match, root) {
               ]
               #("", prev)
             }
-            json_schema.Integer(..) -> {
+            castor.Integer(..) -> {
               let prev = [glance.String(current <> "/"), ..prev]
               let prev = [
                 ast.call1(
@@ -87,10 +87,10 @@ fn query_to_parts(parameters, components: oas.Components) {
     let var = glance.Variable(key)
 
     let mapper = case schema {
-      json_schema.Boolean(..) -> Some(ast.access("bool", "to_string"))
-      json_schema.Integer(..) -> Some(ast.access("int", "to_string"))
-      json_schema.Number(..) -> Some(ast.access("float", "to_string"))
-      json_schema.String(..) -> None
+      castor.Boolean(..) -> Some(ast.access("bool", "to_string"))
+      castor.Integer(..) -> Some(ast.access("int", "to_string"))
+      castor.Number(..) -> Some(ast.access("float", "to_string"))
+      castor.String(..) -> None
       _ -> Some(noop1("query parameter is not supported"))
     }
     let value = case required {
@@ -505,11 +505,10 @@ fn gen_response(operation, components: oas.Components, internal) {
             list.try_fold(rest, [status], fn(acc, this) {
               let #(status, this) = this
               case first, this {
-                json_schema.Ref(ref: a, ..), json_schema.Ref(ref: b, ..)
-                  if a == b
-                -> Ok([status, ..acc])
-                json_schema.Inline(oas.Response(content: a, ..)),
-                  json_schema.Inline(oas.Response(content: b, ..))
+                castor.Ref(ref: a, ..), castor.Ref(ref: b, ..) if a == b ->
+                  Ok([status, ..acc])
+                castor.Inline(oas.Response(content: a, ..)),
+                  castor.Inline(oas.Response(content: b, ..))
                   if a == b
                 -> Ok([status, ..acc])
                 _, _ -> Error(Nil)

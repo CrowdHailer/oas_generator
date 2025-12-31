@@ -1,3 +1,4 @@
+import castor
 import gleam/bit_array
 import gleam/bool
 import gleam/crypto
@@ -7,7 +8,6 @@ import gleam/option.{type Option, None, Some}
 import gleam/string
 import non_empty_list.{NonEmptyList}
 import oas/generator/utils
-import oas/json_schema
 
 pub type Schema(t) {
   Named(String)
@@ -163,28 +163,20 @@ fn not_top(top: Top, acc) -> #(Lifted, _) {
 // nullable is ignored at the moment
 pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
   case schema {
-    json_schema.Ref(ref:, ..) -> #(Named(ref), False, acc)
-    json_schema.Inline(schema) ->
+    castor.Ref(ref:, ..) -> #(Named(ref), False, acc)
+    castor.Inline(schema) ->
       case schema {
-        json_schema.Boolean(nullable:, ..) -> #(
-          Primitive(Boolean),
-          nullable,
-          acc,
-        )
-        json_schema.Integer(nullable:, ..) -> #(
-          Primitive(Integer),
-          nullable,
-          acc,
-        )
-        json_schema.Number(nullable:, ..) -> #(Primitive(Number), nullable, acc)
-        json_schema.String(nullable:, ..) -> #(Primitive(String), nullable, acc)
-        json_schema.Null(..) -> #(Primitive(Null), False, acc)
-        json_schema.Array(nullable:, items:, ..) -> {
+        castor.Boolean(nullable:, ..) -> #(Primitive(Boolean), nullable, acc)
+        castor.Integer(nullable:, ..) -> #(Primitive(Integer), nullable, acc)
+        castor.Number(nullable:, ..) -> #(Primitive(Number), nullable, acc)
+        castor.String(nullable:, ..) -> #(Primitive(String), nullable, acc)
+        castor.Null(..) -> #(Primitive(Null), False, acc)
+        castor.Array(nullable:, items:, ..) -> {
           let #(top, _, acc) = do_lift(items, acc)
           let #(schema, acc) = not_top(top, acc)
           #(Array(schema), nullable, acc)
         }
-        json_schema.Object(
+        castor.Object(
           nullable:,
           properties:,
           required:,
@@ -212,10 +204,7 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
                   },
                 )
               let #(additional, acc) = case additional_properties {
-                None | Some(json_schema.Inline(json_schema.AlwaysFails)) -> #(
-                  None,
-                  acc,
-                )
+                None | Some(castor.Inline(castor.AlwaysFails)) -> #(None, acc)
                 Some(values) -> {
                   let #(top, _, acc) = do_lift(values, acc)
                   let #(schema, acc) = not_top(top, acc)
@@ -230,8 +219,8 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
             }
           }
         }
-        json_schema.AllOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        json_schema.AllOf(items) -> {
+        castor.AllOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        castor.AllOf(items) -> {
           let #(acc, items) =
             list.map_fold(items |> non_empty_list.to_list, acc, fn(acc, item) {
               let #(top, _, acc) = do_lift(item, acc)
@@ -240,15 +229,11 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
             })
           #(Tuple(items), False, acc)
         }
-        json_schema.AnyOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        json_schema.OneOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
-        json_schema.AnyOf(..) | json_schema.OneOf(..) -> #(
-          Unsupported,
-          False,
-          acc,
-        )
+        castor.AnyOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        castor.OneOf(NonEmptyList(schema, [])) -> do_lift(schema, acc)
+        castor.AnyOf(..) | castor.OneOf(..) -> #(Unsupported, False, acc)
         // OAS generator doesn't support any validation beyond types
-        json_schema.Enum(items) -> {
+        castor.Enum(items) -> {
           let NonEmptyList(first, rest) = items
           case first {
             utils.Boolean(_value) ->
@@ -279,8 +264,8 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
             _ -> #(Unsupported, False, acc)
           }
         }
-        json_schema.AlwaysPasses(..) -> #(Primitive(Always), False, acc)
-        json_schema.AlwaysFails(..) -> #(Primitive(Never), False, acc)
+        castor.AlwaysPasses(..) -> #(Primitive(Always), False, acc)
+        castor.AlwaysFails(..) -> #(Primitive(Never), False, acc)
       }
   }
 }

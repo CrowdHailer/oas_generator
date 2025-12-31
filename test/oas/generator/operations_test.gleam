@@ -1,17 +1,17 @@
 import birdie
+import castor
 import gleam/dict
 import gleam/http
 import gleam/option.{None, Some}
 import oas
 import oas/generator as gen
-import oas/json_schema
 
 fn array(items) {
-  json_schema.Array(None, None, False, items, False, None, None, False)
+  castor.Array(None, None, False, items, False, None, None, False)
 }
 
 fn object(params, required) {
-  json_schema.Object(
+  castor.Object(
     dict.from_list(params),
     required,
     None,
@@ -25,17 +25,7 @@ fn object(params, required) {
 }
 
 fn dict(of) {
-  json_schema.Object(
-    dict.new(),
-    [],
-    Some(of),
-    None,
-    0,
-    False,
-    None,
-    None,
-    False,
-  )
+  castor.Object(dict.new(), [], Some(of), None, 0, False, None, None, False)
 }
 
 const no_info = oas.Info("title", None, None, None, None, None, "3.1.0")
@@ -65,11 +55,11 @@ fn path(p, items) {
 }
 
 fn json_response(schema) {
-  json_schema.Inline(oas.Response(None, dict.new(), just_json(schema)))
+  castor.Inline(oas.Response(None, dict.new(), just_json(schema)))
 }
 
 fn empty_response() {
-  json_schema.Inline(oas.Response(None, dict.new(), dict.new()))
+  castor.Inline(oas.Response(None, dict.new(), dict.new()))
 }
 
 fn just_json(schema) {
@@ -77,7 +67,7 @@ fn just_json(schema) {
 }
 
 fn ref(schema) {
-  json_schema.Ref("#/components/schemas/" <> schema, None, None)
+  castor.Ref("#/components/schemas/" <> schema, None, None)
 }
 
 pub fn single_response_test() {
@@ -102,9 +92,9 @@ pub fn just_string_request_test() {
         post(
           "upload-number",
           [],
-          json_schema.Inline(oas.RequestBody(
+          castor.Inline(oas.RequestBody(
             None,
-            just_json(json_schema.Inline(json_schema.integer())),
+            just_json(castor.Inline(castor.integer())),
             True,
           )),
           [#(oas.Status(204), empty_response())],
@@ -126,16 +116,16 @@ pub fn object_request_test() {
         post(
           "set_params",
           [],
-          json_schema.Inline(oas.RequestBody(
+          castor.Inline(oas.RequestBody(
             None,
             just_json(
-              json_schema.Inline(
+              castor.Inline(
                 object(
                   [
-                    #("size", json_schema.Inline(json_schema.integer())),
+                    #("size", castor.Inline(castor.integer())),
                     #(
                       "shape",
-                      json_schema.Ref("#/components/schemas/Shape", None, None),
+                      castor.Ref("#/components/schemas/Shape", None, None),
                     ),
                   ],
                   [],
@@ -163,22 +153,18 @@ pub fn nested_object_request_test() {
         post(
           "set_params",
           [],
-          json_schema.Inline(oas.RequestBody(
+          castor.Inline(oas.RequestBody(
             None,
             just_json(
-              json_schema.Inline(
+              castor.Inline(
                 array(
-                  json_schema.Inline(
+                  castor.Inline(
                     object(
                       [
-                        #("id", json_schema.Inline(json_schema.integer())),
+                        #("id", castor.Inline(castor.integer())),
                         #(
                           "flavour",
-                          json_schema.Ref(
-                            "#/components/schemas/Flavour",
-                            None,
-                            None,
-                          ),
+                          castor.Ref("#/components/schemas/Flavour", None, None),
                         ),
                       ],
                       ["id", "flavour"],
@@ -208,13 +194,9 @@ pub fn dictionary_request_test() {
         post(
           "set_params",
           [],
-          json_schema.Inline(oas.RequestBody(
+          castor.Inline(oas.RequestBody(
             None,
-            just_json(
-              json_schema.Inline(
-                dict(json_schema.Inline(json_schema.integer())),
-              ),
-            ),
+            just_json(castor.Inline(dict(castor.Inline(castor.integer())))),
             True,
           )),
           [#(oas.Status(204), empty_response())],
@@ -236,9 +218,9 @@ pub fn request_body_named_test() {
         post(
           "set_params",
           [],
-          json_schema.Inline(oas.RequestBody(
+          castor.Inline(oas.RequestBody(
             None,
-            just_json(json_schema.Ref("#/components/schemas/params", None, None)),
+            just_json(castor.Ref("#/components/schemas/params", None, None)),
             True,
           )),
           [],
@@ -261,14 +243,12 @@ pub fn single_inline_object_response_test() {
           #(
             oas.Status(200),
             json_response(
-              json_schema.Inline(
+              castor.Inline(
                 object(
                   [
                     #(
                       "items",
-                      json_schema.Inline(
-                        array(json_schema.Inline(json_schema.string())),
-                      ),
+                      castor.Inline(array(castor.Inline(castor.string()))),
                     ),
                     #("thing", ref("thing")),
                   ],
@@ -296,18 +276,15 @@ pub fn nested_object_in_response_test() {
           #(
             oas.Status(200),
             json_response(
-              json_schema.Inline(
+              castor.Inline(
                 object(
                   [
                     #(
                       "metadata",
-                      json_schema.Inline(
-                        object(
-                          [#("param", json_schema.Inline(json_schema.string()))],
-                          [
-                            "param",
-                          ],
-                        ),
+                      castor.Inline(
+                        object([#("param", castor.Inline(castor.string()))], [
+                          "param",
+                        ]),
                       ),
                     ),
                   ],
@@ -334,13 +311,11 @@ pub fn array_parameters_response_test() {
         get(
           "get_users",
           [
-            json_schema.Inline(oas.QueryParameter(
+            castor.Inline(oas.QueryParameter(
               "tags",
               None,
               False,
-              json_schema.Inline(
-                array(json_schema.Inline(json_schema.string())),
-              ),
+              castor.Inline(array(castor.Inline(castor.string()))),
             )),
           ],
           [#(oas.Status(200), json_response(ref("account")))],
@@ -397,10 +372,7 @@ pub fn alway_pass_test() {
     dict.from_list([
       path("/users", [
         get("get_users", [], [
-          #(
-            oas.Status(200),
-            json_response(json_schema.Inline(json_schema.AlwaysPasses)),
-          ),
+          #(oas.Status(200), json_response(castor.Inline(castor.AlwaysPasses))),
         ]),
       ]),
     ])
@@ -420,13 +392,10 @@ pub fn alway_field_pass_test() {
           #(
             oas.Status(200),
             json_response(
-              json_schema.Inline(
-                object(
-                  [#("meta", json_schema.Inline(json_schema.AlwaysPasses))],
-                  [
-                    "meta",
-                  ],
-                ),
+              castor.Inline(
+                object([#("meta", castor.Inline(castor.AlwaysPasses))], [
+                  "meta",
+                ]),
               ),
             ),
           ),
