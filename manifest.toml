@@ -4,7 +4,7 @@
 packages = [
   { name = "argv", version = "1.0.2", build_tools = ["gleam"], requirements = [], otp_app = "argv", source = "hex", outer_checksum = "BA1FF0929525DEBA1CE67256E5ADF77A7CDDFE729E3E3F57A5BDCAA031DED09D" },
   { name = "birdie", version = "1.3.0", build_tools = ["gleam"], requirements = ["argv", "edit_distance", "filepath", "glance", "gleam_community_ansi", "gleam_stdlib", "justin", "rank", "simplifile", "term_size", "trie_again"], otp_app = "birdie", source = "hex", outer_checksum = "425916385B6CD82A58F54CC39605262A524B169746FC9AD9C799BC76E88F7AF3" },
-  { name = "castor", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "non_empty_list", "oas_generator_utils"], otp_app = "castor", source = "hex", outer_checksum = "D07048F5E9B0AB04076714168E45DB367A000C7F572B2BAD84E5314DFBBA1459" },
+  { name = "castor", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "non_empty_list", "oas_generator_utils"], otp_app = "castor", source = "hex", outer_checksum = "165CFE776658EF08C54C01972444AB2DCA1DC4BDB6AD91E7EBBA85C4C4A4CC5F" },
   { name = "edit_distance", version = "2.0.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "edit_distance", source = "hex", outer_checksum = "A1E485C69A70210223E46E63985FA1008B8B2DDA9848B7897469171B29020C05" },
   { name = "filepath", version = "1.1.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "filepath", source = "hex", outer_checksum = "B06A9AF0BF10E51401D64B98E4B627F1D2E48C154967DA7AF4D0914780A6D40A" },
   { name = "glam", version = "2.0.3", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "glam", source = "hex", outer_checksum = "237C2CE218A2A0A5D46D625F8EF5B78F964BC91018B78D692B17E1AB84295229" },
@@ -22,7 +22,7 @@ packages = [
   { name = "glexer", version = "2.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "splitter"], otp_app = "glexer", source = "hex", outer_checksum = "40A1FB0919FA080AD6C5809B4C7DBA545841CAAC8168FACDFA0B0667C22475CC" },
   { name = "justin", version = "1.0.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "justin", source = "hex", outer_checksum = "7FA0C6DB78640C6DC5FBFD59BF3456009F3F8B485BF6825E97E1EB44E9A1E2CD" },
   { name = "non_empty_list", version = "2.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "non_empty_list", source = "hex", outer_checksum = "1CA43D18C07E98E9ED5A60D9CB2FFE0FF40DEFFA45D58A3FF589589F05658F7B" },
-  { name = "oas", version = "8.0.0", build_tools = ["gleam"], requirements = ["castor", "gleam_http", "gleam_json", "gleam_stdlib", "non_empty_list", "oas_generator_utils"], otp_app = "oas", source = "hex", outer_checksum = "915314BEE83960A5AFAE11A916AEFC66F295883CCD69B737DBC139D9196EF278" },
+  { name = "oas", version = "8.0.1", build_tools = ["gleam"], requirements = ["castor", "gleam_http", "gleam_json", "gleam_stdlib", "non_empty_list", "oas_generator_utils"], otp_app = "oas", source = "hex", outer_checksum = "48F514A27FC02E1109471B14FC71BADA4F8213982E3A22169DF31B48B6022A85" },
   { name = "oas_generator_utils", version = "1.1.0", build_tools = ["gleam"], requirements = ["gleam_http", "gleam_javascript", "gleam_json", "gleam_stdlib"], otp_app = "oas_generator_utils", source = "hex", outer_checksum = "54FE8BD638AD149BA943ADD0A8A66E549B2288328AB3EBF764D52805A041EA96" },
   { name = "rank", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "rank", source = "hex", outer_checksum = "5660E361F0E49CBB714CC57CC4C89C63415D8986F05B2DA0C719D5642FAD91C9" },
   { name = "simplifile", version = "2.3.2", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "E049B4DACD4D206D87843BCF4C775A50AE0F50A52031A2FFB40C9ED07D6EC70A" },
@@ -34,6 +34,7 @@ packages = [
 
 [requirements]
 birdie = { version = ">= 1.2.7 and < 2.0.0" }
+castor = { version = ">= 2.0.0 and < 3.0.0" }
 glance = { version = ">= 3.0.0 and < 4.0.0" }
 glance_printer = { version = ">= 3.0.0 and < 4.0.0" }
 gleam_crypto = { version = ">= 1.5.1 and < 2.0.0" }
@@ -47,4 +48,3 @@ oas = { version = ">= 8.0.0 and < 9.0.0" }
 oas_generator_utils = { version = ">= 1.0.0 and < 2.0.0" }
 simplifile = { version = ">= 2.2.1 and < 3.0.0" }
 snag = { version = ">= 1.1.0 and < 2.0.0" }
-castor = { version = ">= 1.0.0 and < 2.0.0" }
