@@ -11,7 +11,7 @@ import oas/generator/ast
 import oas/generator/lift
 import oas/generator/lookup as l
 
-/// From a dictionary of schemas generate all custom types, type aliases, encoders and decoders. 
+/// From a dictionary of schemas generate all custom types, type aliases, encoders and decoders.
 pub fn generate(schemas) {
   let #(internal, named) =
     list.map_fold(schemas |> dict.to_list, [], fn(acc, entry) {
@@ -133,6 +133,7 @@ fn to_type(lifted) -> l.Lookup(glance.Type) {
         lift.Null -> glance.NamedType("Nil", None, [])
         lift.Always -> glance.NamedType("Any", Some("utils"), [])
         lift.Never -> glance.NamedType("Never", Some("utils"), [])
+        lift.Date -> glance.NamedType("Date", Some("calendar"), [])
       }
       |> l.Done
     }
@@ -297,6 +298,7 @@ pub fn to_encoder(lifted: lift.Lifted) -> l.Lookup(glance.Expression) {
     lift.Primitive(lift.Integer) -> ast.access("json", "int") |> l.Done
     lift.Primitive(lift.Number) -> ast.access("json", "float") |> l.Done
     lift.Primitive(lift.String) -> ast.access("json", "string") |> l.Done
+    lift.Primitive(lift.Date) -> ast.access("utils", "encode_date") |> l.Done
     lift.Primitive(lift.Null) ->
       glance.Fn(
         [
@@ -516,6 +518,7 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
         lift.Integer -> ast.access("decode", "int")
         lift.Number -> ast.access("decode", "float")
         lift.String -> ast.access("decode", "string")
+        lift.Date -> ast.access("utils", "decode_date")
         lift.Null -> always_decode()
         lift.Always -> ast.call0("utils", "any_decoder")
         lift.Never -> never_decode()

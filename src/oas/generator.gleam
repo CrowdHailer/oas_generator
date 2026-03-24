@@ -817,6 +817,7 @@ pub fn gen_operations_and_top_files(spec: oas.Document, provider, exclude) {
     "gleam/result",
     "gleam/bool",
     "gleam/dict",
+    "gleam/time/calendar",
   ]
   let operations =
     glance.Module(
@@ -856,6 +857,7 @@ pub fn gen_schema_file(schemas) {
       glance.Definition([], glance.Import("gleam/dynamic/decode", None, [], [])),
       glance.Definition([], glance.Import("gleam/dynamic", None, [], [])),
       glance.Definition([], glance.Import("gleam/json", None, [], [])),
+      glance.Definition([], glance.Import("gleam/time/calendar", None, [], [])),
       glance.Definition([], glance.Import("oas/generator/utils", None, [], [])),
       glance.Definition(
         [],
