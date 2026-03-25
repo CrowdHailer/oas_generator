@@ -43,12 +43,13 @@ pub type Primitive {
   Integer
   Number
   String
+  Date
   Null
   Always
   Never
 }
 
-// Can totally manually pass in config i.e. encoded/decode or even name 
+// Can totally manually pass in config i.e. encoded/decode or even name
 // pub fn lift(schema) {
 //   do_lift(schema, [])
 // }
@@ -109,6 +110,7 @@ fn schema_to_string(schema) {
         Integer -> "Integer"
         Number -> "Number"
         String -> "String"
+        Date -> "Date"
         Null -> "Null"
         Always -> "Always"
         Never -> "Never"
@@ -169,6 +171,9 @@ pub fn do_lift(schema, acc) -> #(Top, Bool, List(_)) {
         castor.Boolean(nullable:, ..) -> #(Primitive(Boolean), nullable, acc)
         castor.Integer(nullable:, ..) -> #(Primitive(Integer), nullable, acc)
         castor.Number(nullable:, ..) -> #(Primitive(Number), nullable, acc)
+        castor.String(nullable:, format: Some("date"), ..) -> {
+          #(Primitive(Date), nullable, acc)
+        }
         castor.String(nullable:, ..) -> #(Primitive(String), nullable, acc)
         castor.Null(..) -> #(Primitive(Null), False, acc)
         castor.Array(nullable:, items:, ..) -> {

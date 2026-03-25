@@ -4,6 +4,7 @@ title: empty_object_is_dictionary_of_anything_test
 ---
 import gleam/option.{type Option, None}
 import oas/generator/utils
+import gleam/time/calendar
 import gleam/json
 import gleam/dynamic
 import gleam/dynamic/decode

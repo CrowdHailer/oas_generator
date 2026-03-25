@@ -1,0 +1,27 @@
+---
+version: 1.3.0
+title: date format schema test
+---
+import gleam/option.{type Option, None}
+import oas/generator/utils
+import gleam/time/calendar
+import gleam/json
+import gleam/dynamic
+import gleam/dynamic/decode
+import gleam/dict
+
+pub type Event {
+  Event(date: calendar.Date, name: String)
+}
+
+pub fn event_decoder() {
+  use date <- decode.field("date", utils.date_decoder())
+  use name <- decode.field("name", decode.string)
+  decode.success(Event(date: date, name: name))
+}
+
+pub fn event_encode(data: Event) {
+  utils.object(
+    [#("date", utils.encode_date(data.date)), #("name", json.string(data.name))],
+  )
+}
