@@ -18,6 +18,17 @@ const nullable_string = castor.String(
   False,
 )
 
+const date_string = castor.String(
+  None,
+  None,
+  None,
+  Some("date"),
+  False,
+  None,
+  None,
+  False,
+)
+
 fn object(params, required) {
   castor.Object(
     dict.from_list(params),
@@ -55,6 +66,15 @@ pub fn nil_alias_test() {
 pub fn simple_string_schema_test() {
   schema([#("my_string", castor.string())])
   |> birdie.snap(title: "simple string schema test")
+}
+
+pub fn date_format_schema_test() {
+  let parameters = [
+    #("name", castor.Inline(castor.string())),
+    #("date", castor.Inline(date_string)),
+  ]
+  schema([#("event", object(parameters, ["name", "date"]))])
+  |> birdie.snap(title: "date format schema test")
 }
 
 pub fn always_test() {

@@ -518,7 +518,7 @@ pub fn to_decoder(lifted) -> l.Lookup(glance.Expression) {
         lift.Integer -> ast.access("decode", "int")
         lift.Number -> ast.access("decode", "float")
         lift.String -> ast.access("decode", "string")
-        lift.Date -> ast.access("utils", "decode_date")
+        lift.Date -> ast.call0("utils", "date_decoder")
         lift.Null -> always_decode()
         lift.Always -> ast.call0("utils", "any_decoder")
         lift.Never -> never_decode()
